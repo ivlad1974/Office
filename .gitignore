@@ -1,2 +1,2 @@
-# Compressed files
-*.zip
+# Build artifacts
+*.bundle
