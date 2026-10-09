@@ -50,7 +50,6 @@
   <div class="sheet-tabs" id="ed-tabs">
     <button class="sheet-tab active" data-sheet="materials">Материалы</button>
     <button class="sheet-tab" data-sheet="smeta">Смета</button>
-    <button class="sheet-tab" data-sheet="obems">Объемы закрытия</button>
     <button class="sheet-tab" data-sheet="ks6">КС-6</button>
     <button class="sheet-tab" data-sheet="ks2">КС-2</button>
     <button class="sheet-tab" data-sheet="ks3">КС-3</button>
@@ -120,22 +119,16 @@
     </table>
   </div>
 
-  <!-- ОБЪЕМЫ ЗАКРЫТИЯ -->
-  <div class="panel hidden" id="panel-obems">
-    <p class="hint">Формируется автоматически из листа КС-6: для каждой даты закрытия — позиции и объёмы (VLOOKUP по № позиции в Смету).</p>
-    <div id="obems-blocks" class="obems"></div>
-  </div>
-
   <!-- КС-6 -->
   <div class="panel hidden" id="panel-ks6">
-    <fieldset><legend>Журнал учёта выполненных работ (КС-6) — настройки закрытий</legend>
-      <div class="form-grid months" id="ks6-months"></div>
-      <p class="hint">Редактировать можно только <b>один</b> столбец: выберите в нём статус «Закрытие» — остальные автоматически перейдут в «----». Формат дат — «Август 2026»; месяц и год меняются раздельно. Введённые объёмы попадают в журнал КС-6, смету, «Объемы закрытия» и КС-2/КС-3.</p>
-    </fieldset>
+    <p class="hint">Управление закрытием — прямо в шапке таблицы: в нужном столбце выберите статус «Закрытие» (остальные автоматически перейдут в «----») и укажите месяц/год выпадающими списками. Введённые объёмы попадают в журнал КС-6, смету и КС-2/КС-3.</p>
     <table class="grid editable" id="ks6-table">
       <thead></thead>
       <tbody></tbody>
     </table>
+    <h3 class="obems-title">Объемы закрытия</h3>
+    <p class="hint">Формируется автоматически из журнала КС-6: для каждой даты закрытия — позиции и объёмы (VLOOKUP по № позиции в Смету).</p>
+    <div id="obems-blocks" class="obems"></div>
   </div>
 
   <!-- КС-2 -->
