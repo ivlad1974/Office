@@ -99,7 +99,7 @@ function fillHeader(){
   $('#hdr-coefw').onchange=e=>{cur.meta.coefWork=C.num(e.target.value);$('#f-coefw').value=e.target.value;recalcAll();};
 }
 function bindH(sel,key){$(sel).onchange=e=>{cur.meta[key]=e.target.value; recalcAll();};}
-function recalcAll(){ if(!cur)return; C.calcKS3(cur); renderCurrent(); }
+function recalcAll(){ if(!cur)return; C.calcKS3(cur); const sh=$(".sheet-tab.active");["materials","smeta","obems","ks6"].forEach(n=>{const el=document.getElementById("panel-"+n);if(el&&!el.classList.contains("hidden"))renderSheet(n);}); save(); }  // автосохранение заказа
 function renderCurrent(){ renderSheet($('.sheet-tab.active').dataset.sheet||'materials'); }
 
 /* ================= ЛИСТЫ ================= */
@@ -180,28 +180,47 @@ function renderObems(){
   cur.obems.forEach(m=>{
     if(!m.rows.length && !m.date) return;
     const d=document.createElement('div'); d.className='obem-block';
-    d.innerHTML=`<h4>Дата закрытия: ${C.fmtD(m.date)} <span class="tag ${m.status==='Закрытие'?'ok':''}">${m.status}</span> (${m.rows.length} поз.)</h4>
+    d.innerHTML=`<h4>${C.fmtMY(m.date)} <span class="tag ${m.status==='Закрытие'?'ok':''}">${m.status}</span> (${m.rows.length} поз.)</h4>
       <table class="grid compact"><thead><tr><th>№ позиции</th><th>Наименование</th><th>Объём</th><th>Остаток в смете</th></tr></thead>
       <tbody>${m.rows.map(r=>`<tr><td>${r.pos}</td><td>${esc(r.name)}</td><td class="num">${r.vol}</td><td class="num">${r.restQty}</td></tr>`).join('')}</tbody></table>`;
     box.appendChild(d);
   });
 }
 
-/* ---- КС-6 ---- */
+/* ---- КС-6 ----
+   Выбор столбца редактирования: ровно ОДИН месяц может иметь статус «Закрытие»,
+   остальные — только «----». Формат шапки дат: «Август 2026» (mmmm yyyy),
+   месяц и год меняются раздельными селекторами. */
 function renderKs6(){
   C.calcSmeta(cur);
+  if(!cur.meta.mmyy) cur.meta.mmyy=[];      // миграция старых заказов: даты -> {m,y}
+  C.months(cur).forEach(m=>{ if(!cur.meta.mmyy[m.i]) cur.meta.mmyy[m.i]={m:m.date.getMonth(),y:m.date.getFullYear()}; });
   const months=C.months(cur);
+  const selIdx=months.findIndex(m=>m.status==='Закрытие');   // единственный выбранный столбец
   const mh=$('#ks6-months');
-  mh.innerHTML=months.map(m=>`<label class="mcell">Мец.${m.i+1}
-     <select data-st="${m.i}"><option ${m.status!=='Закрытие'?'selected':''}>----</option><option ${m.status==='Закрытие'?'selected':''}>Закрытие</option></select>
-     <input type="date" data-dt="${m.i}" value="${m.date?m.date.toISOString().slice(0,10):''}"></label>`).join('');
-  mh.querySelectorAll('[data-st]').forEach(s=>s.onchange=e=>{cur.meta.status[+e.target.dataset.st]=e.target.value;recalcAll();});
-  mh.querySelectorAll('[data-dt]').forEach(s=>s.onchange=e=>{cur.meta.dates[+e.target.dataset.dt]=e.target.value;recalcAll();});
+  mh.innerHTML=months.map(m=>`<label class="mcell${m.status==='Закрытие'?' active':''}">Месяц ${m.i+1}
+     <select data-st="${m.i}" title="Статус: редактировать можно только один столбец">
+       <option value="----"${m.status!=='Закрытие'?' selected':''}>----</option>
+       <option value="Закрытие"${m.status==='Закрытие'?' selected':''}>Закрытие</option>
+     </select>
+     <select data-mm="${m.i}" ${m.status==='Закрытие'?'':'disabled'}>${C.MONTH_NAMES.map((n,mi)=>`<option value="${mi}"${mi===m.date.getMonth()?' selected':''}>${n}</option>`).join('')}</select>
+     <select data-yy="${m.i}" ${m.status==='Закрытие'?'':'disabled'}>${Array.from({length:8},(_,k)=>2023+k).map(y=>`<option${y===m.date.getFullYear()?' selected':''}>${y}</option>`).join('')}</select>
+     </label>`).join('');
+  mh.querySelectorAll('[data-st]').forEach(s=>s.onchange=e=>{
+    const i=+e.target.dataset.st;
+    if(!cur.meta.status||cur.meta.status.length!==9) cur.meta.status=Array(9).fill('----');
+    if(e.target.value==='Закрытие') cur.meta.status.fill('----');   // только один «Закрытие»
+    cur.meta.status[i]=e.target.value;
+    recalcAll();
+  });
+  const setMY=(i,m,y)=>{ C.setMonthYear(cur,i,+m,+y); recalcAll(); };
+  mh.querySelectorAll('[data-mm]').forEach(s=>s.onchange=e=>setMY(+e.target.dataset.mm,e.target.value,cur.meta.mmyy[+e.target.dataset.mm].y));
+  mh.querySelectorAll('[data-yy]').forEach(s=>s.onchange=e=>setMY(+e.target.dataset.yy,cur.meta.mmyy[+e.target.dataset.yy].m,e.target.value));
 
   const P=C.positions(cur);
-  const thead=$('#ks6-table thead'); 
+  const thead=$('#ks6-table thead');
   thead.innerHTML=`<tr><th>№ п/п</th><th>№ поз.</th><th>Наименование</th><th>Ед.изм.</th><th>Кол-во</th>`+
-    months.map(m=>`<th class="${m.status==='Закрытие'?'unlock':''}">${C.fmtD(m.date)}<br><small>${m.status}</small></th>`).join('')+`<th>Остаток</th></tr>`;
+    months.map(m=>`<th class="${m.status==='Закрытие'?'unlock':''}">${C.fmtMY(m.date)}<br><small>${m.status}</small></th>`).join('')+`<th>Остаток</th></tr>`;
   const tb=$('#ks6-table tbody'); tb.innerHTML='';
   cur.rows.forEach((row,ri)=>{
     if(!row.t) return;
@@ -300,7 +319,7 @@ $('#btn-export-reestr').onclick=()=>{
 };
 $('#btn-print-ks2').onclick=()=>printDoc('ks2-doc');
 $('#btn-print-ks3').onclick=()=>printDoc('ks3-doc');
-$('#btn-print-ks6').onclick=()=>{switchSheet('ks6');printArea('#panel-ks6');};
+$('#btn-print-ks6').onclick=()=>{renderKs6();printArea('#panel-ks6');};
 $('#btn-download-zip').onclick=()=>{
   const blob=new Blob([JSON.stringify(cur,null,1)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);

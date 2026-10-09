@@ -33,7 +33,10 @@ td.over{color:#b00;font-weight:700}
 .form-grid label{display:flex;flex-direction:column;font-size:12px;gap:3px;color:#556}
 .form-grid input,.form-grid select{width:100%}
 .months{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
-.mcell{border:1px dashed var(--line);padding:6px;border-radius:6px}
+.mcell{border:1px dashed var(--line);padding:6px;border-radius:6px;display:flex;flex-direction:column;font-size:12px;color:#556;gap:3px}
+.mcell.active{border:2px solid #3a3;background:#eef8ee}
+.mcell select{font-size:12px;padding:2px 4px;width:100%}
+.mcell select:disabled{background:#f0f0f0;color:#999}
 fieldset{background:var(--card);border:1px solid var(--line);border-radius:8px;margin:0 0 12px;padding:12px}
 legend{font-weight:600;padding:0 6px}
 .panel{margin-bottom:16px}
