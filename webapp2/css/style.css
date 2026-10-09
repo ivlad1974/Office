@@ -85,3 +85,13 @@ body:not([data-theme="light"]) input.locked{color:#8b95a5}
 body:not([data-theme="light"]) th.hmonth select{background:var(--card);color:var(--txt)}
 body:not([data-theme="light"]) th.unlock .hstatus{color:var(--txt)}
 @media print{body[data-theme]{background:#fff}}
+
+/* === Редактор: подзаголовки, выделение, буфер === */
+tr.section-row input.sec-name{font-weight:700;background:transparent;border:none;color:var(--txt)}
+tr.section-row.sub-row,input.sec-name.sub{font-weight:600;font-style:italic}
+td input.sec-name.sub{font-weight:600;font-style:italic;padding-left:18px}
+tr.sel td{background:var(--sel,#cfe6ff)}
+body:not([data-theme="light"]) tr.sel td{background:#274b6d}
+.tagline{font-size:.85rem;opacity:.8;margin-left:6px}
+.sep{width:1px;height:22px;background:var(--border,#ccc);margin:0 6px;display:inline-block;vertical-align:middle}
+button.btn.mini.ins{padding:1px 4px;font-size:.75rem;margin:0 1px}

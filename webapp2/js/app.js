@@ -4,17 +4,34 @@ const C=window.Calc, $=s=>document.querySelector(s), $$=s=>[...document.querySel
 const LS='mest_webapp2';
 
 /* ================= ХРАНИЛИЩЕ ================= */
-let store={orders:[],r2:[],our:[],customers:[]};
+let store={orders:[],r2:[],our:[],customers:[],dictMat:[],dictWork:[]};
+/* Справочники материалов и работ (аналог листов-баз Excel «Материалы»/«Работы»).
+   Заполняются один раз из SEED.rows (1178 строк исходной книги), далее редактируются
+   пользователем на вкладке «Справочник». */
+function buildDictsFromSeed(){
+  const m={},w={};
+  SEED.rows.forEach(r=>{
+    if(r.t==='Материалы'){ const k=(r.n||'').trim().toLowerCase(); if(k&&!m[k]) m[k]={n:r.n,u:r.u||'',p:r.p||0}; }
+    else if(r.t==='Работа'){ const k=(r.n||'').trim().toLowerCase(); if(k&&!w[k]) w[k]={n:r.n,u:r.u||'',p:r.p||0}; }
+  });
+  return {mat:Object.values(m).sort((a,b)=>a.n.localeCompare(b.n,'ru')),
+          work:Object.values(w).sort((a,b)=>a.n.localeCompare(b.n,'ru'))};
+}
 function loadStore(){
-  try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&s.orders) store=s; }catch(e){}
+  try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&s.orders) store=Object.assign(store,s); }catch(e){}
   if(!store.orders.length){
     // сид: текущий заказ из SEED + записи Реестра ЗАКАЗОВ (суммы) как список заказов
     store.orders=[seedOrder()];
     store.r2=SEED.r2.slice();
     store.our=SEED.our.slice();
     store.customers=SEED.customers.slice();
-    save();
   }
+  if(!store.dictMat.length||!store.dictWork.length){   // миграция хранилищ старых версий
+    const d=buildDictsFromSeed();
+    if(!store.dictMat.length) store.dictMat=d.mat;
+    if(!store.dictWork.length) store.dictWork=d.work;
+  }
+  save();
 }
 function seedOrder(){
   return {id:'o-seed',created:new Date().toISOString(),
@@ -44,6 +61,7 @@ $$('.tab').forEach(b=>b.onclick=()=>{
   if(b.dataset.view==='reestr2') renderR2();
   if(b.dataset.view==='kontr') renderKontr();
   if(b.dataset.view==='orders') renderOrders();
+  if(b.dataset.view==='sprav') renderSprav();
 });
 $('#ed-tabs') && $$('.sheet-tab').forEach(b=>b.onclick=()=>{
   $$('.sheet-tab').forEach(x=>x.classList.remove('active')); b.classList.add('active');
@@ -113,23 +131,57 @@ function renderSheet(name){
   if(name==='export') renderExport();
 }
 
-/* ---- Материалы (редактируемая таблица) ---- */
+/* ---- Материалы (редактируемая таблица) ----
+   Возможности:
+   - подзаголовки при вводе строки: «1.Раздел» / «Электрощитовая (…))» — строка без типа t=null
+     становится заголовком раздела/подзаголовком (аналог жирных строк в Excel-листе Материалы);
+   - выбор типа «Подзаголовок» в ячейке «Материалы/Услуги» превращает строку в подзаголовок;
+   - вставка строки МЕЖДУ существующими (кнопки ▲＋▼ на любой строке);
+   - копирование строки и группы строк (чекбокс «выбрать» + кнопки Копировать/Вырезать/Вставить),
+     вставка в любое место;
+   - автоподстановка цены/ед.изм. из Справочника материалов и работ по названию. */
+let rowClipboard=[];   // буфер копирования строк заказа
+let selRows=new Set(); // выделенные строки (для копирования группы)
+/* data-i в DOM всегда = актуальный индекс в cur.rows, т.к. таблица перерисовывается
+   после любой вставки/удаления. rowsInDom() — страховка от устаревшего DOM. */
+function rowsInDom(){ return $$('#mat-table tbody tr').map(tr=>{
+  const el=tr.querySelector('[data-i]'); return el?+el.dataset.i:-1; }).filter(i=>i>=0); }
+function dictLookup(name,t){
+  const k=(name||'').trim().toLowerCase(); if(!k) return null;
+  const src = t==='Работа'? store.dictWork : t==='Материалы'? store.dictMat : (store.dictMat.concat(store.dictWork));
+  const hit=src.find(d=>d.n.trim().toLowerCase()===k);
+  return hit||null;
+}
 function renderMaterials(){
   C.calcMaterials(cur);
   const tb=$('#mat-table tbody'); tb.innerHTML='';
   cur.rows.forEach((row,i)=>{
     const tr=document.createElement('tr');
-    if(!row.t){ tr.className='section-row';
-      tr.innerHTML=`<td></td><td></td><td colspan="8"><input class="sec-name" data-i="${i}" value="${esc(row.n||'')}"></td><td><button class="btn mini danger" data-rm="${i}">✕</button></td>`;
+    if(selRows.has(i)) tr.classList.add('sel');
+    const insBtns=`<button class="btn mini ins" data-ins-before="${i}" title="Вставить строку выше">△＋</button>
+                   <button class="btn mini ins" data-ins-after="${i}" title="Вставить строку ниже">▽＋</button>`;
+    if(!row.t){ // заголовок раздела / подзаголовок
+      tr.className='section-row';
+      tr.innerHTML=`<td><input type="checkbox" class="pick" data-pick="${i}" ${selRows.has(i)?'checked':''}></td>
+        <td><select class="sec-type" data-i="${i}"><option${row.sub?'':' selected'}>Заголовок</option><option${row.sub?' selected':''}>Подзаголовок</option></select></td>
+        <td colspan="7"><input class="sec-name${row.sub?' sub':''}" data-i="${i}" value="${esc(row.n||'')}" placeholder="Название раздела / подзаголовка"></td>
+        <td>${insBtns}</td>
+        <td><button class="btn mini" data-cp="${i}" title="Копировать группу/строку">⧉</button>
+           <button class="btn mini danger" data-rm="${i}">✕</button></td>`;
     } else {
-      tr.innerHTML=`<td>${row.pp||''}</td><td>${esc(row.t)}</td>
-        <td><input data-f="n" data-i="${i}" value="${esc(row.n||'')}"></td>
+      tr.innerHTML=`<td><input type="checkbox" class="pick" data-pick="${i}" ${selRows.has(i)?'checked':''}></td>
+        <td><select data-f="t" data-i="${i}">
+            <option${row.t==='Материалы'?' selected':''}>Материалы</option>
+            <option${row.t==='Работа'?' selected':''}>Работа</option>
+            <option value="__sub">Подзаголовок</option></select></td>
+        <td><input data-f="n" data-i="${i}" value="${esc(row.n||'')}" list="dict-list-${row.t==='Работа'?'w':'m'}" title="Начните вводить — автоподстановка из справочника"></td>
         <td><input data-f="u" data-i="${i}" value="${esc(row.u||'')}" size="4"></td>
         <td><input data-f="q" data-i="${i}" class="num" value="${row.q??''}"></td>
         <td><input data-f="p" data-i="${i}" class="num" value="${row.p??''}"></td>
         <td class="num">${C.money(row.sum)}</td><td class="num">${C.money(row.I)}</td><td class="num">${C.money(row.J)}</td>
-        <td><input data-f="note" data-i="${i}" value="${esc(row.note||'')}" size="8"></td>
-        <td><button class="btn mini danger" data-rm="${i}">✕</button></td>`;
+        <td>${insBtns}</td>
+        <td><button class="btn mini" data-cp="${i}" title="Копировать группу/строку">⧉</button>
+           <button class="btn mini danger" data-rm="${i}">✕</button></td>`;
     }
     tb.appendChild(tr);
   });
@@ -137,20 +189,79 @@ function renderMaterials(){
   $('#tot-work').textContent=C.money(cur.totals.work);
   $('#tot-all').textContent=C.money(cur.totals.all);
   $('#hdr-total').textContent=C.money(cur.totals.all);
-  tb.querySelectorAll('input[data-f]').forEach(inp=>inp.onchange=e=>{
-    const r=cur.rows[+e.target.dataset.i], f=e.target.dataset.f;
-    r[f]=(f==='q'||f==='p')?C.num(e.target.value):e.target.value;
+  $('#clip-info').textContent=rowClipboard.length?`Буфер: ${rowClipboard.length} стр.`:'';
+
+  tb.onchange=e=>{                                   // делегирование: устойчиво к перерисовке DOM
+    const el=e.target;
+    if(el.classList.contains('sec-name')){ cur.rows[+el.dataset.i].n=el.value; return recalcAll(); }
+    if(el.classList.contains('sec-type')){ cur.rows[+el.dataset.i].sub=el.value==='Подзаголовок'; return recalcAll(); }
+    if(!el.dataset || el.dataset.f===undefined) return;
+    const i=+el.dataset.i, r=cur.rows[i], f=el.dataset.f;
+    if(f==='t'){ // смена типа; опция «Подзаголовок» превращает строку в подзаголовок
+      if(el.value==='__sub'){ r.t=null; r.sub=true; return recalcAll(); }
+      r.t=el.value;
+    } else r[f]=(f==='q'||f==='p')?C.num(el.value):el.value;
+    if(f==='n'){ const d=dictLookup(r.n,r.t); if(d){ r.u=d.u; r.p=d.p; toast(`Из справочника: цена ${C.money(d.p)}, ед. ${d.u}`);} }
     recalcAll();
+  };
+  tb.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.rm; if(rowsInDom()[i]!==i){selRows.clear();return renderMaterials();}
+    if(selRows.size>1 && selRows.has(i)){ // удаляем всю выделенную группу
+      cur.rows=cur.rows.filter((_,j)=>!selRows.has(j)); selRows.clear();
+    } else { cur.rows.splice(i,1); selRows.clear(); }
+    renumberVols(); recalcAll();
   });
-  tb.querySelectorAll('.sec-name').forEach(inp=>inp.onchange=e=>{cur.rows[+e.target.dataset.i].n=e.target.value;renderCurrent();});
-  tb.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{cur.rows.splice(+b.dataset.rm,1);renumberVols();recalcAll();});
+  tb.querySelectorAll('[data-pick]').forEach(cb=>cb.onchange=e=>{
+    const i=+e.target.dataset.pick;
+    e.target.checked?selRows.add(i):selRows.delete(i);
+    e.target.closest('tr').classList.toggle('sel',e.target.checked);
+    $('#sel-count').textContent=selRows.size?`Выделено: ${selRows.size}`:'';
+  });
+  tb.querySelectorAll('[data-cp]').forEach(b=>b.onclick=copyAt);
+  tb.querySelectorAll('[data-ins-before]').forEach(b=>b.onclick=()=>insertRow(+b.dataset.insBefore,'above'));
+  tb.querySelectorAll('[data-ins-after]').forEach(b=>b.onclick=()=>insertRow(+b.dataset.insAfter,'below'));
+
+  function copyAt(e){
+    const i=+e.currentTarget.dataset.cp;
+    if(rowsInDom()[i]!==i){selRows.clear();return renderMaterials();}
+    let idxs = selRows.size ? [...selRows].sort((a,b)=>a-b) : [i];
+    rowClipboard = idxs.map(j=>JSON.parse(JSON.stringify(cur.rows[j])));
+    toast(`Скопировано строк: ${rowClipboard.length}${selRows.size?' (группа)':''}`);
+    $('#clip-info').textContent=`Буфер: ${rowClipboard.length} стр.`;
+  }
+  function insertRow(anchor,where){
+    if(rowsInDom()[anchor]!==anchor){selRows.clear();renderMaterials();return toast('Таблица обновилась — нажмите ещё раз');}
+    const at = where==='above'?anchor:anchor+1;
+    if(rowClipboard.length){                       // вставка из буфера (строка или группа) в любое место
+      cur.rows.splice(at,0,...rowClipboard.map(r=>JSON.parse(JSON.stringify(r))));
+      toast(`Вставлено строк: ${rowClipboard.length}`);
+    } else {
+      cur.rows.splice(at,0,{t:'Материалы',n:'',u:'шт',q:0,p:0});
+    }
+    renumberVols(); recalcAll();
+  }
 }
 $$('.add-row').forEach(b=>b.onclick=()=>{
   const kind=b.dataset.kind;
-  if(kind==='header') cur.rows.push({t:null,n:'Новый заголовок',u:null,q:null,p:null});
+  if(kind==='header') cur.rows.push({t:null,n:'Новый заголовок',sub:false,u:null,q:null,p:null});
+  else if(kind==='sub') cur.rows.push({t:null,n:'Новый подзаголовок',sub:true,u:null,q:null,p:null});
   else cur.rows.push({t:kind,n:'',u:'шт',q:0,p:0});
   renumberVols(); recalcAll();
 });
+document.getElementById('btn-cut-rows').addEventListener('click',()=>{
+  if(!selRows.size) return toast('Выделите строки чекбоксами');
+  rowClipboard=[...selRows].sort((a,b)=>a-b).map(j=>JSON.parse(JSON.stringify(cur.rows[j])));
+  cur.rows=cur.rows.filter((_,j)=>!selRows.has(j)); selRows.clear(); renumberVols(); recalcAll();
+  toast(`Вырезано строк: ${rowClipboard.length}`); });
+$('#btn-copy-rows').onclick=()=>{
+  if(!selRows.size) return toast('Выделите строки чекбоксами или нажмите ⧉ на строке');
+  const i=Math.min(...selRows);
+  if(rowsInDom()[i]!==i){selRows.clear();return renderMaterials();}
+  $(`#mat-table [data-cp="${i}"]`)?.click(); };
+document.getElementById('btn-paste-rows').addEventListener('click',()=>{
+  if(!rowClipboard.length) return toast('Буфер пуст');
+  cur.rows.push(...rowClipboard.map(r=>JSON.parse(JSON.stringify(r)))); renumberVols(); recalcAll();
+  toast(`Вставлено в конец: ${rowClipboard.length} стр. (или △＋/▽＋ — в любое место)`); });
 function renumberVols(){ /* позиции после удаления/добавления сдвигаются — пересчёт заново при рендере */ }
 
 /* ---- Смета ---- */
@@ -385,8 +496,64 @@ function renderKontr(){
 $('#btn-our-add').onclick=()=>{store.our.push({list:'Новая',name:'',inn:'',kpp:'',okpo:'',addr:'',sign:'',post:'',fio:'',nds:'НДС 22%'});save();renderKontr();};
 $('#btn-cust-add').onclick=()=>{store.customers.push({list:'Новый заказчик',name:'',inn:'',kpp:'',okpo:'',addr:'',sign:''});save();renderKontr();};
 
+/* ================= СПРАВОЧНИК МАТЕРИАЛОВ И РАБОТ =================
+   Отдельная вкладка: две редактируемые таблицы — Материалы и Работы.
+   Используется редактором заказа: при вводе наименования строки автоподстановка
+   ед.изм. и цены из справочника (dictLookup). Изначально заполняется из данных
+   исходной Excel-книги (1178 строк), далее полностью под контролем пользователя. */
+let spravFilter={m:'',w:''};
+function renderSprav(){
+  const defs=[['m','dictMat','Материалы'],['w','dictWork','Работы']];
+  defs.forEach(([s,key,label])=>{
+    const q=(spravFilter[s]||'').toLowerCase();
+    const tb=$('#sprav-'+s+'-tbody'); if(!tb) return; tb.innerHTML='';
+    let shown=0;
+    store[key].forEach((d,i)=>{
+      if(q && !d.n.toLowerCase().includes(q)) return;
+      shown++;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${i+1}</td>
+        <td><input data-k="n" data-i="${i}" value="${esc(d.n)}"></td>
+        <td><input data-k="u" data-i="${i}" value="${esc(d.u||'')}" size="6"></td>
+        <td><input data-k="p" data-i="${i}" class="num" value="${d.p??''}"></td>
+        <td><button class="btn mini" data-addorder="${s}" data-i="${i}" title="Добавить в открытый заказ">→ Заказ</button>
+            <button class="btn mini danger" data-del="${i}">✕</button></td>`;
+      tb.appendChild(tr);
+    });
+    $('#sprav-'+s+'-count').textContent=`${shown} / ${store[key].length}`;
+    tb.querySelectorAll('input').forEach(inp=>inp.onchange=e=>{
+      const d=store[key][+e.target.dataset.i];
+      d[e.target.dataset.k]=(e.target.dataset.k==='p')?C.num(e.target.value):e.target.value;
+      save();
+    });
+    tb.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{store[key].splice(+b.dataset.del,1);save();renderSprav();});
+    tb.querySelectorAll('[data-addorder]').forEach(b=>b.onclick=()=>{
+      if(!cur) return toast('Сначала откройте заказ (вкладка Заказы → Открыть)');
+      const d=store[key][+b.dataset.i];
+      cur.rows.push({t:s==='m'?'Материалы':'Работа',n:d.n,u:d.u,q:1,p:d.p});
+      recalcAll(); switchSheet('materials'); toast(`Добавлено в заказ: ${String(d.n).slice(0,50)}`);
+    });
+  });
+}
+$('#btn-sprav-add-m').onclick=()=>{store.dictMat.unshift({n:'Новый материал',u:'шт',p:0});save();renderSprav();};
+$('#btn-sprav-add-w').onclick=()=>{store.dictWork.unshift({n:'Новая работа',u:'шт',p:0});save();renderSprav();};
+$('#sprav-search-m').oninput=e=>{spravFilter.m=e.target.value.toLowerCase();renderSprav();};
+$('#sprav-search-w').oninput=e=>{spravFilter.w=e.target.value.toLowerCase();renderSprav();};
+$('#btn-sprav-reset').onclick=()=>{
+  if(!confirm('Перезаполнить справочники из данных исходной Excel-книги? Ваши правки будут потеряны.'))return;
+  const d=buildDictsFromSeed(); store.dictMat=d.mat; store.dictWork=d.work; save(); renderSprav();
+  toast('Справочники восстановлены из оригинала');
+};
+
 /* ================= utils ================= */
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+/* datalist для автоподстановки наименований в редакторе (первые 300 записей —
+   чтобы не тормозить DOM; полный поиск — через dictLookup по точному совпадению) */
+function fillDatalists(){
+  const dl=m=>m.slice(0,300).map(d=>`<option value="${esc(d.n)}">`).join('');
+  $('#dict-list-m').innerHTML=dl(store.dictMat);
+  $('#dict-list-w').innerHTML=dl(store.dictWork);
+}
 function toast(t){const el=$('#toast');el.textContent=t;el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),2500);}
 
 /* ================= ТЕМЫ (светлая/тёмная/синяя/сепия) ================= */
@@ -401,5 +568,7 @@ let savedTheme='light'; try{savedTheme=localStorage.getItem('mes_theme')||'light
 if(!THEMES[savedTheme]) savedTheme='light';
 applyTheme(savedTheme);
 
-loadStore(); renderOrders();
+loadStore(); renderOrders(); fillDatalists();
+/* отладка/тесты: доступ к внутреннему состоянию */
+window.__APP={get cur(){return cur},set cur(v){cur=v},store,rowClipboard:()=>rowClipboard,selRows};
 })();
