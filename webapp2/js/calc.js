@@ -255,13 +255,15 @@ C.calcKS2 = function(order){
   const ndsLabel = order.meta.ndsMode==='НДС 5%'?'В т.ч. НДС  5%':'В т.ч. НДС 22%';
 
   // строки акта: заголовки (разделы) + позиции с объёмом >0 в активном месяце
+  // ВАЖНО: список позиций считаем ОДИН раз (раньше C.positions(order) вызывался
+  // внутри forEach для каждой строки — это O(n²) и «веками» открыло заказ)
+  const posByIdx={}; C.positions(order).forEach(p=>posByIdx[p.idx]=p);
   const lines=[]; let counter=0;
   order.rows.forEach((row,ri)=>{
     if(!row.t){ // потенциальный заголовок раздела
-      const nextItems=order.rows.slice(ri+1);
       lines.push({type:'head',name:row.n}); return;
     }
-    const pos=C.positions(order).find(p=>p.idx===ri);
+    const pos=posByIdx[ri];
     if(!pos) return;
     const v = actIdx>=0 ? C.num((order.vols[pos.pos]||{})['m'+actIdx]) : 0;
     if(v>0){
