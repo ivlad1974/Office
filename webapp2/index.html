@@ -35,14 +35,14 @@
     <button id="btn-new-order" class="btn primary">＋ Новый заказ (шаблон)</button>
     <input id="order-search" class="search" placeholder="Поиск по названию объекта…">
   </div>
-  <table class="grid" id="orders-table">
+  <div class="scroll-wrap"><table class="grid" id="orders-table">
     <thead><tr>
       <th>#</th><th>Имя ОБЪЕКТА в РЕЕСТР</th><th>Организация</th><th>Заказчик</th>
       <th>Дата договора</th><th>Сумма заказа (с НДС)</th><th>Закрыто на сумму</th>
       <th>Дата записи</th><th></th>
     </tr></thead>
     <tbody></tbody>
-  </table>
+  </table></div>
 </section>
 
 <!-- ================= РЕДАКТОР ЗАКАЗА ================= -->
@@ -55,6 +55,7 @@
     <button id="btn-print-ks2" class="btn">🖨 Печать КС-2</button>
     <button id="btn-print-ks3" class="btn">🖨 Печать КС-3</button>
     <button id="btn-print-ks6" class="btn">🖨 Печать КС-6</button>
+    <button id="btn-print-current" class="btn" title="Печать активной таблицы (Материалы/Смета/КС-6)">🖨 Печать таблицы</button>
   </div>
 
   <div class="sheet-tabs" id="ed-tabs">
@@ -89,6 +90,11 @@
   <!-- МАТЕРИАЛЫ -->
   <div class="panel" id="panel-materials">
     <div class="toolbar slim">
+      <!-- Вставка строк и удаление — слева -->
+      <button id="btn-ins-above" class="btn" title="Вставить новую строку (или буфер) ВЫШЕ текущей">△＋ Выше</button>
+      <button id="btn-ins-below" class="btn" title="Вставить новую строку (или буфер) НИЖЕ текущей">▽＋ Ниже</button>
+      <button id="btn-del-rows" class="btn danger" title="Удалить выделенное (с подтверждением)">🗑 Удалить</button>
+      <span class="sep"></span>
       <button class="btn add-row" data-kind="header">＋ Заголовок раздела</button>
       <button class="btn add-row" data-kind="sub">＋ Подзаголовок</button>
       <button class="btn add-row" data-kind="Материалы">＋ Материалы</button>
@@ -97,14 +103,15 @@
       <button id="btn-copy-rows" class="btn" title="Копировать выделенные (или одну через ⧉ на строке)">⧉ Копировать</button>
       <button id="btn-cut-rows" class="btn">✂ Вырезать</button>
       <button id="btn-paste-rows" class="btn" title="Вставить в конец; △＋/▽＋ на строке — в любое место">📋 Вставить</button>
+      <button id="btn-clear-sel" class="btn mini hidden">Снять выделение</button>
       <span id="sel-count" class="tagline"></span>
       <span id="clip-info" class="tagline"></span>
       <span class="spacer"></span>
       <b>Коэф.:&nbsp;<input id="hdr-coefm" type="number" step="0.01" class="coef mini" value="1">
       &nbsp;<input id="hdr-coefw" type="number" step="0.01" class="coef mini" value="1">&nbsp; Итого:&nbsp;<span id="hdr-total">0</span></b>
     </div>
-    <p class="hint">Подсказки: тип строки «Подзаголовок» превращает её в подзаголовок раздела; кнопки △＋/▽＋ вставляют новую строку или буфер копирования между существующими; чекбоксы слева выделяют группу строк для копирования/вырезания/удаления; при вводе наименования цена и ед.изм. подставляются из Справочника.</p>
-    <table class="grid editable" id="mat-table">
+    <p class="hint">Подсказки: при выборе позиции из справочника (datalist) или точном вводе наименования — Тип, Ед.изм. и Цена проставляются САМИ; тип строки «Подзаголовок» превращает её в подзаголовок раздела; кнопки △＋/▽＋ вставляют новую строку или буфер копирования между существующими; клик по строке + Shift+клик — выделение диапазона, чекбоксы — точечное; удаление всегда подтверждается; ширину столбцов можно менять мышью за правую границу заголовка (или двойной клик — автоширина).</p>
+    <div class="scroll-wrap"><table class="grid editable" id="mat-table">
       <thead><tr>
         <th>✓</th><th>Тип</th><th>Наименование</th><th>Ед.изм.</th>
         <th>Кол-во, ед.</th><th>Цена руб. с НДС</th><th>Сумма с НДС</th>
@@ -115,7 +122,7 @@
         <td colspan="6" class="right"><b>ИТОГО</b></td>
         <td id="tot-mat">0</td><td id="tot-work">0</td><td id="tot-all">0</td><td colspan="2"></td>
       </tr></tfoot>
-    </table>
+    </table></div>
     <datalist id="dict-list-m"></datalist>
     <datalist id="dict-list-w"></datalist>
   </div>
@@ -127,7 +134,7 @@
       <span>Выполнено с начала работ (без НДС): <b id="sm-done">0</b></span>
       <span>Выполнено с начала года (без НДС): <b id="sm-ytd">0</b></span>
     </div>
-    <table class="grid" id="smeta-table">
+    <div class="scroll-wrap"><table class="grid" id="smeta-table">
       <thead><tr>
         <th>№ поз.</th><th>Конструктивные элементы и виды работ</th><th>Ед.изм.</th>
         <th>Цена за ед., руб (без НДС)</th><th>Кол-во по калькуляции</th>
@@ -136,16 +143,16 @@
         <th>Остаток: кол-во</th><th>сумма</th>
       </tr></thead>
       <tbody></tbody>
-    </table>
+    </table></div>
   </div>
 
   <!-- КС-6 -->
   <div class="panel hidden" id="panel-ks6">
     <p class="hint">Управление закрытием — прямо в шапке таблицы: в нужном столбце выберите статус «Закрытие» (остальные автоматически перейдут в «----») и укажите месяц/год выпадающими списками. Введённые объёмы попадают в журнал КС-6, смету и КС-2/КС-3.</p>
-    <table class="grid editable" id="ks6-table">
+    <div class="scroll-wrap"><table class="grid editable" id="ks6-table">
       <thead></thead>
       <tbody></tbody>
-    </table>
+    </table></div>
     <h3 class="obems-title">Объемы закрытия</h3>
     <p class="hint">Формируется автоматически из журнала КС-6: для каждой даты закрытия — позиции и объёмы (VLOOKUP по № позиции в Смету).</p>
     <div id="obems-blocks" class="obems"></div>
@@ -171,7 +178,7 @@
   <!-- ЭКСПОРТ -->
   <div class="panel hidden" id="panel-export">
     <p class="hint">Строка экспорта в Реестр 2 (аналог именованного диапазона «Экспорт», макрос СохранениеНовогоЗаказа → PasteSpecial в РасчетДокументация).</p>
-    <table class="grid" id="export-table"><tbody></tbody></table>
+    <div class="scroll-wrap"><table class="grid" id="export-table"><tbody></tbody></table></div>
     <div class="toolbar">
       <button id="btn-download-zip" class="btn">⬇ Скачать данные заказа (JSON)</button>
       <button id="btn-close-order" class="btn danger">✕ Закрыть заказ</button>
@@ -200,16 +207,16 @@
   <p class="hint">Заполнен из данных исходной книги (1178 строк). Используется редактором заказа: при вводе наименования автоподстановка ед.изм. и цены; кнопка «→ Заказ» добавляет позицию в открытый заказ.</p>
   <h3>Материалы (<span id="sprav-m-count">0</span>)
       <input id="sprav-search-m" class="search" placeholder="Поиск по названию…"></h3>
-  <table class="grid compact editable" id="sprav-m-table">
+  <div class="scroll-wrap"><table class="grid compact editable" id="sprav-m-table">
     <thead><tr><th>№</th><th>Наименование</th><th>Ед.изм.</th><th>Цена руб. с НДС</th><th></th></tr></thead>
     <tbody id="sprav-m-tbody"></tbody>
-  </table>
+  </table></div>
   <h3>Работы (<span id="sprav-w-count">0</span>)
       <input id="sprav-search-w" class="search" placeholder="Поиск по названию…"></h3>
-  <table class="grid compact editable" id="sprav-w-table">
+  <div class="scroll-wrap"><table class="grid compact editable" id="sprav-w-table">
     <thead><tr><th>№</th><th>Наименование</th><th>Ед.изм.</th><th>Цена руб. с НДС</th><th></th></tr></thead>
     <tbody id="sprav-w-tbody"></tbody>
-  </table>
+  </table></div>
 </section>
 
 <!-- ================= КОНТРАГЕНТЫ ================= -->
@@ -219,13 +226,13 @@
     <button id="btn-cust-add" class="btn">＋ Заказчик</button>
   </div>
   <h3>Наши компании (Подрядчик)</h3>
-  <table class="grid" id="our-table"><thead><tr>
+  <div class="scroll-wrap"><table class="grid" id="our-table"><thead><tr>
     <th>Список</th><th>Наименование</th><th>ИНН</th><th>КПП</th><th>ОКПО</th><th>Адрес</th>
-    <th>Наименование в подписи</th><th>Должность</th><th>ФИО</th><th>НДС</th><th></th></tr></thead><tbody></tbody></table>
+    <th>Наименование в подписи</th><th>Должность</th><th>ФИО</th><th>НДС</th><th></th></tr></thead><tbody></tbody></table></div>
   <h3>Заказчики</h3>
-  <table class="grid" id="cust-table"><thead><tr>
+  <div class="scroll-wrap"><table class="grid" id="cust-table"><thead><tr>
     <th>Список</th><th>Наименование</th><th>ИНН</th><th>КПП</th><th>ОКПО</th><th>Адрес</th>
-    <th>Наименование в подписи</th><th></th></tr></thead><tbody></tbody></table>
+    <th>Наименование в подписи</th><th></th></tr></thead><tbody></tbody></table></div>
 </section>
 
 <div id="toast" class="toast hidden"></div>

@@ -2,6 +2,24 @@
 (function(){
 const C=window.Calc, $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const LS='mest_webapp2';
+/* Подтверждение удаления: собственный диалог с контрастными темами;
+   если window.confirm переопределён тестами — используем его. */
+function askConfirm(msg){
+  if(typeof window.__TEST_CONFIRM==='function') return window.__TEST_CONFIRM(msg);
+  return new Promise(res=>{
+    const ov=document.createElement('div'); ov.className='cfrm-overlay';
+    ov.innerHTML=`<div class="cfrm-box"><div class="cfrm-msg"></div><div class="cfrm-btns">
+      <button class="btn primary cfrm-ok">Да, удалить</button><button class="btn cfrm-no">Отмена</button></div></div>`;
+    ov.querySelector('.cfrm-msg').textContent=msg;
+    document.body.appendChild(ov);
+    const done=v=>{ov.remove();res(v);};
+    ov.querySelector('.cfrm-ok').onclick=()=>done(true);
+    ov.querySelector('.cfrm-no').onclick=()=>done(false);
+    ov.onclick=e=>{if(e.target===ov)done(false);};
+    document.addEventListener('keydown',function h(e){if(e.key==='Escape'){done(false);document.removeEventListener('keydown',h);}});
+    ov.querySelector('.cfrm-no').focus();
+  });
+}
 
 /* ================= ХРАНИЛИЩЕ ================= */
 let store={orders:[],r2:[],our:[],customers:[],dictMat:[],dictWork:[]};
@@ -52,6 +70,7 @@ function newBlankOrder(){
 }
 function save(){ localStorage.setItem(LS,JSON.stringify(store)); }
 let cur=null; // открытый заказ
+let curSheet='materials';
 
 /* ================= НАВИГАЦИЯ ================= */
 $$('.tab').forEach(b=>b.onclick=()=>{
@@ -89,8 +108,9 @@ function renderOrders(){
     tb.appendChild(tr);
   });
   tb.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openEditor(store.orders.find(o=>o.id===b.dataset.open)));
-  tb.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
-    if(confirm('Удалить заказ?')){store.orders=store.orders.filter(o=>o.id!==b.dataset.del);save();renderOrders();}});
+  autoFitColumns('#orders-table');
+  tb.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    if(await askConfirm('Удалить заказ?')){store.orders=store.orders.filter(o=>o.id!==b.dataset.del);save();renderOrders();}});
 }
 $('#order-search').oninput=renderOrders;
 $('#btn-new-order').onclick=()=>{const o=newBlankOrder();store.orders.push(o);save();openEditor(o);};
@@ -133,15 +153,17 @@ function renderSheet(name){
 
 /* ---- Материалы (редактируемая таблица) ----
    Возможности:
-   - подзаголовки при вводе строки: «1.Раздел» / «Электрощитовая (…))» — строка без типа t=null
-     становится заголовком раздела/подзаголовком (аналог жирных строк в Excel-листе Материалы);
-   - выбор типа «Подзаголовок» в ячейке «Материалы/Услуги» превращает строку в подзаголовок;
-   - вставка строки МЕЖДУ существующими (кнопки ▲＋▼ на любой строке);
-   - копирование строки и группы строк (чекбокс «выбрать» + кнопки Копировать/Вырезать/Вставить),
-     вставка в любое место;
-   - автоподстановка цены/ед.изм. из Справочника материалов и работ по названию. */
+   - при выборе позиции из справочника (datalist) или точном вводе наименования
+     Тип / Ед.изм. / Цена проставляются САМИ (applyDictToRow);
+   - подзаголовки при вводе строки; выбор типа «Подзаголовок» превращает строку в подзаголовок;
+   - вставка строки МЕЖДУ существующими (кнопки слева △＋ Выше / ▽＋ Ниже и на любой строке);
+   - копирование строки и группы строк (чекбокс + Shift+клик по диапазону), вставка в любое место;
+   - удаление ВСЕГДА с подтверждением (confirm);
+   - шапка таблицы прикреплена (sticky), ширина столбцов — авто по содержимому
+     и перетаскивание мышью за границу заголовка (двойной клик — снова авто). */
 let rowClipboard=[];   // буфер копирования строк заказа
 let selRows=new Set(); // выделенные строки (для копирования группы)
+let lastClickedRow=null; // для выделения диапазона через Shift
 /* data-i в DOM всегда = актуальный индекс в cur.rows, т.к. таблица перерисовывается
    после любой вставки/удаления. rowsInDom() — страховка от устаревшего DOM. */
 function rowsInDom(){ return $$('#mat-table tbody tr').map(tr=>{
@@ -152,16 +174,33 @@ function dictLookup(name,t){
   const hit=src.find(d=>d.n.trim().toLowerCase()===k);
   return hit||null;
 }
+/* Автоопределение ТИПА по справочнику: наименование есть только в работах — «Работа»,
+   только в материалах — «Материалы»; если не найдено — оставляем текущий тип. */
+function dictTypeOf(k){
+  const inM=store.dictMat.some(d=>d.n.trim().toLowerCase()===k);
+  const inW=store.dictWork.some(d=>d.n.trim().toLowerCase()===k);
+  if(inW&&!inM) return 'Работа';
+  if(inM&&!inW) return 'Материалы';
+  return null;
+}
+function applyDictToRow(r){
+  const k=(r.n||'').trim().toLowerCase(); if(!k) return false;
+  const t=dictTypeOf(k); if(t) r.t=t;
+  const d=dictLookup(r.n,r.t)||dictLookup(r.n,null);
+  if(d){ r.u=d.u; r.p=d.p; toast(`Справочник: ${r.t}, ед. ${d.u}, цена ${C.money(d.p)} — проставлено автоматически`); return true; }
+  return false;
+}
 function renderMaterials(){
   C.calcMaterials(cur);
   const tb=$('#mat-table tbody'); tb.innerHTML='';
   cur.rows.forEach((row,i)=>{
     const tr=document.createElement('tr');
+    tr.dataset.row=i;
     if(selRows.has(i)) tr.classList.add('sel');
     const insBtns=`<button class="btn mini ins" data-ins-before="${i}" title="Вставить строку выше">△＋</button>
                    <button class="btn mini ins" data-ins-after="${i}" title="Вставить строку ниже">▽＋</button>`;
     if(!row.t){ // заголовок раздела / подзаголовок
-      tr.className='section-row';
+      tr.className='section-row'+(row.sub?' sub-row':'');
       tr.innerHTML=`<td><input type="checkbox" class="pick" data-pick="${i}" ${selRows.has(i)?'checked':''}></td>
         <td><select class="sec-type" data-i="${i}"><option${row.sub?'':' selected'}>Заголовок</option><option${row.sub?' selected':''}>Подзаголовок</option></select></td>
         <td colspan="7"><input class="sec-name${row.sub?' sub':''}" data-i="${i}" value="${esc(row.n||'')}" placeholder="Название раздела / подзаголовка"></td>
@@ -174,7 +213,7 @@ function renderMaterials(){
             <option${row.t==='Материалы'?' selected':''}>Материалы</option>
             <option${row.t==='Работа'?' selected':''}>Работа</option>
             <option value="__sub">Подзаголовок</option></select></td>
-        <td><input data-f="n" data-i="${i}" value="${esc(row.n||'')}" list="dict-list-${row.t==='Работа'?'w':'m'}" title="Начните вводить — автоподстановка из справочника"></td>
+        <td><input data-f="n" data-i="${i}" value="${esc(row.n||'')}" list="dict-list-${row.t==='Работа'?'w':'m'}" title="Выберите позицию из справочника — Тип, ед.изм. и цена проставятся сами"></td>
         <td><input data-f="u" data-i="${i}" value="${esc(row.u||'')}" size="4"></td>
         <td><input data-f="q" data-i="${i}" class="num" value="${row.q??''}"></td>
         <td><input data-f="p" data-i="${i}" class="num" value="${row.p??''}"></td>
@@ -190,6 +229,7 @@ function renderMaterials(){
   $('#tot-all').textContent=C.money(cur.totals.all);
   $('#hdr-total').textContent=C.money(cur.totals.all);
   $('#clip-info').textContent=rowClipboard.length?`Буфер: ${rowClipboard.length} стр.`:'';
+  updateSelInfo();
 
   tb.onchange=e=>{                                   // делегирование: устойчиво к перерисовке DOM
     const el=e.target;
@@ -201,21 +241,43 @@ function renderMaterials(){
       if(el.value==='__sub'){ r.t=null; r.sub=true; return recalcAll(); }
       r.t=el.value;
     } else r[f]=(f==='q'||f==='p')?C.num(el.value):el.value;
-    if(f==='n'){ const d=dictLookup(r.n,r.t); if(d){ r.u=d.u; r.p=d.p; toast(`Из справочника: цена ${C.money(d.p)}, ед. ${d.u}`);} }
+    if(f==='n'){ applyDictToRow(r); }                // Тип/ед./цена проставляются сами
     recalcAll();
   };
-  tb.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{
+  /* Удаление — ВСЕГДА с подтверждением */
+  tb.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{
     const i=+b.dataset.rm; if(rowsInDom()[i]!==i){selRows.clear();return renderMaterials();}
     if(selRows.size>1 && selRows.has(i)){ // удаляем всю выделенную группу
-      cur.rows=cur.rows.filter((_,j)=>!selRows.has(j)); selRows.clear();
-    } else { cur.rows.splice(i,1); selRows.clear(); }
+      if(!await askConfirm(`Удалить выделенные строки (${selRows.size} шт.)?`)) return;
+      cur.rows=cur.rows.filter((_,j)=>!selRows.has(j)); selRows.clear(); lastClickedRow=null;
+    } else {
+      const nm=String(cur.rows[i].n||'позиция').slice(0,60);
+      if(!await askConfirm(`Удалить строку №${i+1}: «${nm}»?`)) return;
+      cur.rows.splice(i,1); selRows.clear(); lastClickedRow=null;
+    }
     renumberVols(); recalcAll();
   });
   tb.querySelectorAll('[data-pick]').forEach(cb=>cb.onchange=e=>{
     const i=+e.target.dataset.pick;
     e.target.checked?selRows.add(i):selRows.delete(i);
+    lastClickedRow=i;
     e.target.closest('tr').classList.toggle('sel',e.target.checked);
-    $('#sel-count').textContent=selRows.size?`Выделено: ${selRows.size}`:'';
+    updateSelInfo();
+  });
+  /* Клик по строке + Shift+клик — выделение ДИАПАЗОНА подряд (как в проводнике);
+     Ctrl+клик — добавить/убрать строку из выделения */
+  tb.querySelectorAll('tr[data-row]').forEach(tr=>tr.onclick=e=>{
+    if(e.target.matches('input,select,button,textarea')) return;
+    const i=+tr.dataset.row;
+    if(e.shiftKey && lastClickedRow!=null){
+      const a=Math.min(lastClickedRow,i), b=Math.max(lastClickedRow,i);
+      for(let j=a;j<=b;j++) selRows.add(j);
+    } else if(e.ctrlKey||e.metaKey){
+      selRows.has(i)?selRows.delete(i):selRows.add(i); lastClickedRow=i;
+    } else { selRows.clear(); selRows.add(i); lastClickedRow=i; }
+    $$('#mat-table tbody tr').forEach(x=>{const ri=+x.dataset.row; x.classList.toggle('sel',selRows.has(ri));
+      const cb=x.querySelector('.pick'); if(cb) cb.checked=selRows.has(ri);});
+    updateSelInfo();
   });
   tb.querySelectorAll('[data-cp]').forEach(b=>b.onclick=copyAt);
   tb.querySelectorAll('[data-ins-before]').forEach(b=>b.onclick=()=>insertRow(+b.dataset.insBefore,'above'));
@@ -231,15 +293,36 @@ function renderMaterials(){
   }
   function insertRow(anchor,where){
     if(rowsInDom()[anchor]!==anchor){selRows.clear();renderMaterials();return toast('Таблица обновилась — нажмите ещё раз');}
-    const at = where==='above'?anchor:anchor+1;
-    if(rowClipboard.length){                       // вставка из буфера (строка или группа) в любое место
-      cur.rows.splice(at,0,...rowClipboard.map(r=>JSON.parse(JSON.stringify(r))));
-      toast(`Вставлено строк: ${rowClipboard.length}`);
-    } else {
-      cur.rows.splice(at,0,{t:'Материалы',n:'',u:'шт',q:0,p:0});
-    }
-    renumberVols(); recalcAll();
+    pasteAt(where==='above'?anchor:anchor+1);
   }
+  autoFitColumns('#mat-table');
+}
+function updateSelInfo(){
+  const c=$('#sel-count'); if(c) c.textContent=selRows.size?`Выделено: ${selRows.size}`:'';
+  const b=$('#btn-clear-sel'); if(b) b.classList.toggle('hidden',!selRows.size);
+}
+function selectedIdxs(){ return [...selRows].sort((a,b)=>a-b); }
+async function deleteSelectionWithConfirm(){
+  if(!selRows.size) return toast('Выделите строки (клик / Shift+клик / чекбокс)');
+  if(!await askConfirm(`Удалить выделенные строки (${selRows.size} шт.)?`)) return;
+  cur.rows=cur.rows.filter((_,j)=>!selRows.has(j)); selRows.clear(); lastClickedRow=null;
+  renumberVols(); recalcAll();
+}
+/* тулбар слева: вставка/удаление */
+function toolbarAnchor(){ return selRows.size? Math.min(...selRows) : (lastClickedRow!=null?lastClickedRow:cur.rows.length-1); }
+$('#btn-ins-above').onclick=()=>pasteAt(Math.max(0,toolbarAnchor()));
+$('#btn-ins-below').onclick=()=>pasteAt(Math.min(cur.rows.length,toolbarAnchor()+1));
+$('#btn-del-rows').onclick=deleteSelectionWithConfirm;
+$('#btn-clear-sel').onclick=()=>{selRows.clear();lastClickedRow=null;updateSelInfo();renderMaterials();};
+function pasteAt(at){
+  if(rowClipboard.length){                       // вставка из буфера (строка или группа) в любое место
+    cur.rows.splice(at,0,...rowClipboard.map(r=>JSON.parse(JSON.stringify(r))));
+    toast(`Вставлено строк: ${rowClipboard.length}`);
+  } else {
+    cur.rows.splice(at,0,{t:'Материалы',n:'',u:'шт',q:0,p:0});
+    toast('Вставлена новая строка');
+  }
+  renumberVols(); recalcAll();
 }
 $$('.add-row').forEach(b=>b.onclick=()=>{
   const kind=b.dataset.kind;
@@ -249,9 +332,9 @@ $$('.add-row').forEach(b=>b.onclick=()=>{
   renumberVols(); recalcAll();
 });
 document.getElementById('btn-cut-rows').addEventListener('click',()=>{
-  if(!selRows.size) return toast('Выделите строки чекбоксами');
-  rowClipboard=[...selRows].sort((a,b)=>a-b).map(j=>JSON.parse(JSON.stringify(cur.rows[j])));
-  cur.rows=cur.rows.filter((_,j)=>!selRows.has(j)); selRows.clear(); renumberVols(); recalcAll();
+  if(!selRows.size) return toast('Выделите строки (клик / Shift+клик / чекбокс)');
+  rowClipboard=selectedIdxs().map(j=>JSON.parse(JSON.stringify(cur.rows[j])));
+  cur.rows=cur.rows.filter((_,j)=>!selRows.has(j)); selRows.clear(); lastClickedRow=null; renumberVols(); recalcAll();
   toast(`Вырезано строк: ${rowClipboard.length}`); });
 $('#btn-copy-rows').onclick=()=>{
   if(!selRows.size) return toast('Выделите строки чекбоксами или нажмите ⧉ на строке');
@@ -263,6 +346,55 @@ document.getElementById('btn-paste-rows').addEventListener('click',()=>{
   cur.rows.push(...rowClipboard.map(r=>JSON.parse(JSON.stringify(r)))); renumberVols(); recalcAll();
   toast(`Вставлено в конец: ${rowClipboard.length} стр. (или △＋/▽＋ — в любое место)`); });
 function renumberVols(){ /* позиции после удаления/добавления сдвигаются — пересчёт заново при рендере */ }
+
+/* ---- Автоширина + ручное изменение ширины столбцов ----
+   Колонки получают ширину по содержимому (autoFitColumns), затем пользователь
+   может тянуть за правую границу <th> (col-grip) или двойным кликом по границе
+   вернуть автоширину. Работает для всех таблиц приложения. */
+function measureColWidth(table,ci){
+  let max=0;
+  table.querySelectorAll('tr').forEach(tr=>{
+    const td=tr.children[ci]; if(!td) return;
+    const inp=td.querySelector('input,select');
+    const probe=document.createElement('span');
+    probe.style.cssText='position:absolute;visibility:hidden;white-space:nowrap;font-family:"Segoe UI",Arial,sans-serif;font-size:13px;padding:0 14px;font-weight:'+(td.closest('thead')?'600':'400');
+    probe.textContent=(inp?(inp.value??inp.textContent??''):td.textContent)||'';
+    document.body.appendChild(probe); const w=probe.offsetWidth; probe.remove();
+    if(w>max) max=w;
+  });
+  return Math.min(Math.max(max+6,42),520);
+}
+function autoFitColumns(sel){
+  const table=document.querySelector(sel); if(!table||!table.querySelector('thead tr')) return;
+  const headRow=table.querySelector('thead tr');
+  const nCols=headRow.children.length;
+  for(let ci=0;ci<nCols;ci++){
+    const th=headRow.children[ci];
+    if(th._userWidth) continue;              // не трогаем колонки, которые менял пользователь
+    th.style.width=measureColWidth(table,ci)+'px';
+  }
+  ensureResizers(table);
+}
+function ensureResizers(table){
+  if(table._resized) return; table._resized=true;
+  table.querySelectorAll('thead th').forEach(th=>{
+    th.style.position='relative';
+    const g=document.createElement('div'); g.className='col-grip';
+    th.appendChild(g);
+    g.addEventListener('mousedown',e=>{
+      e.preventDefault(); e.stopPropagation();
+      const startX=e.clientX, startW=th.offsetWidth;
+      const mv=ev=>{ th.style.width=Math.max(36,startW+ev.clientX-startX)+'px'; th._userWidth=true; };
+      const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
+      document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+    });
+    g.addEventListener('dblclick',e=>{ e.stopPropagation();
+      const ci=[...th.parentNode.children].indexOf(th);
+      th._userWidth=false; th.style.width=measureColWidth(table,ci)+'px';
+    });
+  });
+}
+
 
 /* ---- Смета ---- */
 function renderSmeta(){
@@ -281,6 +413,7 @@ function renderSmeta(){
       <td class="num">${x.rest}</td><td class="num">${C.money(x.restSum)}</td>`;
     tb.appendChild(tr);
   });
+  autoFitColumns('#smeta-table');
 }
 
 /* ---- Объемы закрытия (блоки под журналом КС-6) ---- */
@@ -362,6 +495,7 @@ function renderKs6(){
     if(val>0) cur.vols[pos]['m'+m]=val; else delete cur.vols[pos]['m'+m];
     recalcAll();
   });
+  autoFitColumns('#ks6-table');
 }
 
 /* ---- КС-2 документ ---- */
@@ -448,7 +582,11 @@ $('#btn-download-zip').onclick=()=>{
   a.download='Заказ_'+(cur.meta.objectName||'new')+'.json';a.click();
 };
 $('#btn-close-order').onclick=()=>{$('#view-editor').classList.add('hidden');$('#view-orders').classList.remove('hidden');renderOrders();};
-function switchSheet(k){$$('.sheet-tab').forEach(b=>b.classList.toggle('active',b.dataset.sheet===k));renderSheet(k);}
+function switchSheet(k){curSheet=k;$$('.sheet-tab').forEach(b=>b.classList.toggle('active',b.dataset.sheet===k));renderSheet(k);}
+/* печать активной таблицы (Материалы/Смета/КС-6) — отдельная кнопка */
+const PRINT_MAP={materials:'#panel-materials',smeta:'#panel-smeta',ks6:'#panel-ks6',ks2:'#panel-ks2',ks3:'#panel-ks3',export:'#panel-export'};
+function printCurrent(){printArea(PRINT_MAP[curSheet]||'#panel-materials');}
+$('#btn-print-current') && ($('#btn-print-current').onclick=printCurrent);
 function printDoc(id){const w=window.open('','_blank');w.document.write('<html><head><title>Печать</title><link rel="stylesheet" href="css/style.css"></head><body class="print">'+$('#'+id).outerHTML+'</body></html>');w.document.close();w.print();}
 function printArea(sel){const w=window.open('','_blank');w.document.write('<html><head><title>Печать</title><link rel="stylesheet" href="css/style.css"></head><body class="print">'+$(sel).innerHTML+'</body></html>');w.document.close();w.print();}
 
@@ -470,6 +608,7 @@ function renderR2(){
     }).join('');
     tb.appendChild(tr);
   });
+  autoFitColumns('#r2-table');
 }
 $('#r2-search')&&($('#r2-search').oninput=renderR2);
 $('#btn-r2-add').onclick=()=>{store.r2.push({object:'Новый заказ',source:'',ddate:'',customer:'',closeSum:0,planCost:0,factCost:0,matPlan:0,uslPlan:0,inn:'',kurator:'',version:'web',dateRec:new Date().toISOString().slice(0,10),user:'web',path:''});save();renderR2();};
@@ -483,7 +622,11 @@ function renderKontr(){
     otb.appendChild(tr);
   });
   otb.querySelectorAll('input').forEach(inp=>inp.onchange=e=>{store.our[+e.target.dataset.i][e.target.dataset.k]=e.target.value;save();});
-  otb.querySelectorAll('[data-del-o]').forEach(b=>b.onclick=()=>{store.our.splice(+b.dataset.delO,1);save();renderKontr();});
+  otb.querySelectorAll('[data-del-o]').forEach(b=>b.onclick=async()=>{
+    const o=store.our[+b.dataset.delO];
+    if(!await askConfirm(`Удалить организацию «${o.list||o.name}»?`)) return;
+    store.our.splice(+b.dataset.delO,1);save();renderKontr();});
+  autoFitColumns('#our-table');
   const ctb=$('#cust-table tbody');ctb.innerHTML='';
   store.customers.forEach((o,i)=>{
     const tr=document.createElement('tr');
@@ -491,7 +634,11 @@ function renderKontr(){
     ctb.appendChild(tr);
   });
   ctb.querySelectorAll('input').forEach(inp=>inp.onchange=e=>{store.customers[+e.target.dataset.i][e.target.dataset.k]=e.target.value;save();});
-  ctb.querySelectorAll('[data-del-c]').forEach(b=>b.onclick=()=>{store.customers.splice(+b.dataset.delC,1);save();renderKontr();});
+  ctb.querySelectorAll('[data-del-c]').forEach(b=>b.onclick=async()=>{
+    const c=store.customers[+b.dataset.delC];
+    if(!await askConfirm(`Удалить заказчика «${c.list||c.name}»?`)) return;
+    store.customers.splice(+b.dataset.delC,1);save();renderKontr();});
+  autoFitColumns('#cust-table');
 }
 $('#btn-our-add').onclick=()=>{store.our.push({list:'Новая',name:'',inn:'',kpp:'',okpo:'',addr:'',sign:'',post:'',fio:'',nds:'НДС 22%'});save();renderKontr();};
 $('#btn-cust-add').onclick=()=>{store.customers.push({list:'Новый заказчик',name:'',inn:'',kpp:'',okpo:'',addr:'',sign:''});save();renderKontr();};
@@ -521,12 +668,16 @@ function renderSprav(){
       tb.appendChild(tr);
     });
     $('#sprav-'+s+'-count').textContent=`${shown} / ${store[key].length}`;
+    autoFitColumns('#sprav-'+s+'-table');
     tb.querySelectorAll('input').forEach(inp=>inp.onchange=e=>{
       const d=store[key][+e.target.dataset.i];
       d[e.target.dataset.k]=(e.target.dataset.k==='p')?C.num(e.target.value):e.target.value;
       save();
     });
-    tb.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{store[key].splice(+b.dataset.del,1);save();renderSprav();});
+    tb.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+      const d=store[key][+b.dataset.del];
+      if(!await askConfirm(`Удалить из справочника: «${String(d.n).slice(0,80)}»?`)) return;
+      store[key].splice(+b.dataset.del,1);save();renderSprav();});
     tb.querySelectorAll('[data-addorder]').forEach(b=>b.onclick=()=>{
       if(!cur) return toast('Сначала откройте заказ (вкладка Заказы → Открыть)');
       const d=store[key][+b.dataset.i];
