@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Расчёт и Документация — WEB (аналог Реестр 2 / Заказ xlsm)</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">⚡ МЭС · Расчёт и Документация</div>
+  <nav id="tabs">
+    <button class="tab active" data-view="orders">Заказы</button>
+    <button class="tab" data-view="editor">Заказ (редактор)</button>
+    <button class="tab" data-view="reestr2">Реестр 2 (Расчёт/Документация)</button>
+    <button class="tab" data-view="kontr">Контрагенты</button>
+  </nav>
+</header>
+
+<main>
+<!-- ================= СПИСОК ЗАКАЗОВ ================= -->
+<section id="view-orders" class="view">
+  <div class="toolbar">
+    <h2>Список заказов</h2>
+    <button id="btn-new-order" class="btn primary">＋ Новый заказ (шаблон)</button>
+    <input id="order-search" class="search" placeholder="Поиск по названию объекта…">
+  </div>
+  <table class="grid" id="orders-table">
+    <thead><tr>
+      <th>#</th><th>Имя ОБЪЕКТА в РЕЕСТР</th><th>Организация</th><th>Заказчик</th>
+      <th>Дата договора</th><th>Сумма заказа (с НДС)</th><th>Закрыто на сумму</th>
+      <th>Дата записи</th><th></th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<!-- ================= РЕДАКТОР ЗАКАЗА ================= -->
+<section id="view-editor" class="view hidden">
+  <div class="toolbar">
+    <h2 id="ed-title">Заказ</h2>
+    <span class="spacer"></span>
+    <button id="btn-save-order" class="btn primary">💾 Сохранить</button>
+    <button id="btn-export-reestr" class="btn">📤 Экспорт в Реестр 2</button>
+    <button id="btn-print-ks2" class="btn">🖨 Печать КС-2</button>
+    <button id="btn-print-ks3" class="btn">🖨 Печать КС-3</button>
+    <button id="btn-print-ks6" class="btn">🖨 Печать КС-6</button>
+  </div>
+
+  <div class="sheet-tabs" id="ed-tabs">
+    <button class="sheet-tab active" data-sheet="materials">Материалы</button>
+    <button class="sheet-tab" data-sheet="smeta">Смета</button>
+    <button class="sheet-tab" data-sheet="obems">Объемы закрытия</button>
+    <button class="sheet-tab" data-sheet="ks6">КС-6</button>
+    <button class="sheet-tab" data-sheet="ks2">КС-2</button>
+    <button class="sheet-tab" data-sheet="ks3">КС-3</button>
+    <button class="sheet-tab" data-sheet="export">Экспорт</button>
+  </div>
+
+  <!-- ВВОД / шапка -->
+  <div class="panel" id="panel-input">
+    <fieldset><legend>ВВОД (шапка заказа)</legend>
+      <div class="form-grid">
+        <label>Имя ОБЪЕКТА в РЕЕСТР <input id="f-object" type="text"></label>
+        <label>Наша организация
+          <select id="f-org"></select></label>
+        <label>Заказчик
+          <select id="f-customer"></select></label>
+        <label>Источник заказа <input id="f-source" type="text"></label>
+        <label>Дата договора <input id="f-ddate" type="date"></label>
+        <label>Стройка <input id="f-stroyka" type="text"></label>
+        <label>Объект (полное наименование) <input id="f-obekt" type="text"></label>
+        <label>Договор (номер) <input id="f-dogovor" type="text"></label>
+        <label>Коэф. Материалы <input id="f-coefm" type="number" step="0.01" value="1"></label>
+        <label>Коэф. Работа <input id="f-coefw" type="number" step="0.01" value="1"></label>
+      </div>
+    </fieldset>
+  </div>
+
+  <!-- МАТЕРИАЛЫ -->
+  <div class="panel" id="panel-materials">
+    <div class="toolbar slim">
+      <button class="btn add-row" data-kind="header">＋ Заголовок раздела</button>
+      <button class="btn add-row" data-kind="Материалы">＋ Материалы</button>
+      <button class="btn add-row" data-kind="Работа">＋ Работа</button>
+      <span class="spacer"></span>
+      <b>Коэф.:&nbsp;<input id="hdr-coefm" type="number" step="0.01" class="coef mini" value="1">
+      &nbsp;<input id="hdr-coefw" type="number" step="0.01" class="coef mini" value="1">&nbsp; Итого:&nbsp;<span id="hdr-total">0</span></b>
+    </div>
+    <table class="grid editable" id="mat-table">
+      <thead><tr>
+        <th>п/п</th><th>Материалы / Услуги</th><th>Наименование</th><th>Ед.изм.</th>
+        <th>Кол-во, ед.</th><th>Цена руб. с НДС</th><th>Сумма с НДС</th>
+        <th>Σ Матер. (×Kм)</th><th>Σ Работа (×Kr)</th><th>Примечание</th><th></th>
+      </tr></thead>
+      <tbody></tbody>
+      <tfoot><tr>
+        <td colspan="7" class="right"><b>ИТОГО</b></td>
+        <td id="tot-mat">0</td><td id="tot-work">0</td><td id="tot-all">0</td><td></td>
+      </tr></tfoot>
+    </table>
+  </div>
+
+  <!-- СМЕТА -->
+  <div class="panel hidden" id="panel-smeta">
+    <div class="kv">
+      <span>Смета на сумму (без НДС): <b id="sm-total">0</b></span>
+      <span>Выполнено с начала работ (без НДС): <b id="sm-done">0</b></span>
+      <span>Выполнено с начала года (без НДС): <b id="sm-ytd">0</b></span>
+    </div>
+    <table class="grid" id="smeta-table">
+      <thead><tr>
+        <th>№ поз.</th><th>Конструктивные элементы и виды работ</th><th>Ед.изм.</th>
+        <th>Цена за ед., руб (без НДС)</th><th>Кол-во по калькуляции</th>
+        <th>Стоимость Матер.</th><th>Стоимость Усл.</th>
+        <th>Выполнено с начала работ: кол-во</th><th>сумма</th>
+        <th>Остаток: кол-во</th><th>сумма</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- ОБЪЕМЫ ЗАКРЫТИЯ -->
+  <div class="panel hidden" id="panel-obems">
+    <p class="hint">Формируется автоматически из листа КС-6: для каждой даты закрытия — позиции и объёмы (VLOOKUP по № позиции в Смету).</p>
+    <div id="obems-blocks" class="obems"></div>
+  </div>
+
+  <!-- КС-6 -->
+  <div class="panel hidden" id="panel-ks6">
+    <fieldset><legend>Журнал учёта выполненных работ (КС-6) — настройки закрытий</legend>
+      <div class="form-grid months" id="ks6-months"></div>
+      <p class="hint">«Закрытие» — столбец разблокирован для ввода объёмов (как макрос Worksheet_Change). Даты рассчитываются авто: дата1 = Дата КС-2, далее +31 день.</p>
+    </fieldset>
+    <table class="grid editable" id="ks6-table">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- КС-2 -->
+  <div class="panel hidden" id="panel-ks2">
+    <fieldset><legend>Параметры акта КС-2</legend>
+      <div class="form-grid">
+        <label>Дата КС-2 (Дата_КС2) <input id="f-ks2date" type="date"></label>
+        <label>Отчётный период «с» (вручную, пусто = 1 число месяца) <input id="f-per-from" type="date"></label>
+        <label>Отчётный период «по» (вручную, пусто = конец месяца) <input id="f-per-to" type="date"></label>
+      </div>
+    </fieldset>
+    <div id="ks2-doc" class="doc a4"></div>
+  </div>
+
+  <!-- КС-3 -->
+  <div class="panel hidden" id="panel-ks3">
+    <div id="ks3-doc" class="doc a4"></div>
+  </div>
+
+  <!-- ЭКСПОРТ -->
+  <div class="panel hidden" id="panel-export">
+    <p class="hint">Строка экспорта в Реестр 2 (аналог именованного диапазона «Экспорт», макрос СохранениеНовогоЗаказа → PasteSpecial в РасчетДокументация).</p>
+    <table class="grid" id="export-table"><tbody></tbody></table>
+    <div class="toolbar">
+      <button id="btn-download-zip" class="btn">⬇ Скачать данные заказа (JSON)</button>
+      <button id="btn-close-order" class="btn danger">✕ Закрыть заказ</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= РЕЕСТР 2 ================= -->
+<section id="view-reestr2" class="view hidden">
+  <div class="toolbar">
+    <h2>Реестр 2 — «РасчетДокументация» (<span id="r2-count">0</span> записей)</h2>
+    <input id="r2-search" class="search" placeholder="Поиск…">
+    <button id="btn-r2-add" class="btn primary">＋ Добавить запись вручную</button>
+  </div>
+  <div class="scroll-x"><table class="grid compact" id="r2-table"><thead></thead><tbody></tbody></table></div>
+</section>
+
+<!-- ================= КОНТРАГЕНТЫ ================= -->
+<section id="view-kontr" class="view hidden">
+  <div class="toolbar"><h2>Контрагенты</h2>
+    <button id="btn-our-add" class="btn primary">＋ Наша организация</button>
+    <button id="btn-cust-add" class="btn">＋ Заказчик</button>
+  </div>
+  <h3>Наши компании (Подрядчик)</h3>
+  <table class="grid" id="our-table"><thead><tr>
+    <th>Список</th><th>Наименование</th><th>ИНН</th><th>КПП</th><th>ОКПО</th><th>Адрес</th>
+    <th>Наименование в подписи</th><th>Должность</th><th>ФИО</th><th>НДС</th><th></th></tr></thead><tbody></tbody></table>
+  <h3>Заказчики</h3>
+  <table class="grid" id="cust-table"><thead><tr>
+    <th>Список</th><th>Наименование</th><th>ИНН</th><th>КПП</th><th>ОКПО</th><th>Адрес</th>
+    <th>Наименование в подписи</th><th></th></tr></thead><tbody></tbody></table>
+</section>
+
+<div id="toast" class="toast hidden"></div>
+</main>
+
+<script src="js/data.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
