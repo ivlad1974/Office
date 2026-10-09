@@ -90,19 +90,12 @@
   <!-- МАТЕРИАЛЫ -->
   <div class="panel" id="panel-materials">
     <div class="toolbar slim">
-      <!-- Вставка строк и удаление — слева -->
-      <button id="btn-ins-above" class="btn" title="Вставить новую строку (или буфер) ВЫШЕ текущей">△＋ Выше</button>
-      <button id="btn-ins-below" class="btn" title="Вставить новую строку (или буфер) НИЖЕ текущей">▽＋ Ниже</button>
-      <button id="btn-del-rows" class="btn danger" title="Удалить выделенное (с подтверждением)">🗑 Удалить</button>
-      <span class="sep"></span>
-      <button class="btn add-row" data-kind="header">＋ Заголовок раздела</button>
-      <button class="btn add-row" data-kind="sub">＋ Подзаголовок</button>
-      <button class="btn add-row" data-kind="Материалы">＋ Материалы</button>
-      <button class="btn add-row" data-kind="Работа">＋ Работа</button>
-      <span class="sep"></span>
+      <!-- Вставка строк — плюсики МЕЖДУ строками внутри таблицы (тип выбирается там же);
+           здесь только операции с выделением и буфером -->
+      <button id="btn-del-rows" class="btn danger" title="Удалить выделенное (с подтверждением)">🗑 Удалить выделенное</button>
       <button id="btn-copy-rows" class="btn" title="Копировать выделенные (или одну через ⧉ на строке)">⧉ Копировать</button>
       <button id="btn-cut-rows" class="btn">✂ Вырезать</button>
-      <button id="btn-paste-rows" class="btn" title="Вставить в конец; △＋/▽＋ на строке — в любое место">📋 Вставить</button>
+      <button id="btn-paste-rows" class="btn" title="Вставить в конец; ＋ между строками — в любое место">📋 Вставить</button>
       <button id="btn-clear-sel" class="btn mini hidden">Снять выделение</button>
       <span id="sel-count" class="tagline"></span>
       <span id="clip-info" class="tagline"></span>
@@ -110,21 +103,20 @@
       <b>Коэф.:&nbsp;<input id="hdr-coefm" type="number" step="0.01" class="coef mini" value="1">
       &nbsp;<input id="hdr-coefw" type="number" step="0.01" class="coef mini" value="1">&nbsp; Итого:&nbsp;<span id="hdr-total">0</span></b>
     </div>
-    <p class="hint">Подсказки: при выборе позиции из справочника (datalist) или точном вводе наименования — Тип, Ед.изм. и Цена проставляются САМИ; тип строки «Подзаголовок» превращает её в подзаголовок раздела; кнопки △＋/▽＋ вставляют новую строку или буфер копирования между существующими; клик по строке + Shift+клик — выделение диапазона, чекбоксы — точечное; удаление всегда подтверждается; ширину столбцов можно менять мышью за правую границу заголовка (или двойной клик — автоширина).</p>
+    <p class="hint">Подсказки: для добавления строки нажмите ＋ на линии между строками (в конце таблицы — последняя ＋) и выберите тип: Заголовок, Подзаголовок или Позиция; при выборе наименования из справочника Тип, Ед.изм. и Цена проставляются САМИ — выбирать их не нужно; клик по строке + Shift+клик — выделение диапазона, чекбоксы — точечное; удаление всегда подтверждается; ширину столбцов можно менять мышью за правую границу заголовка (или двойной клик — автоширина).</p>
     <div class="scroll-wrap"><table class="grid editable" id="mat-table">
       <thead><tr>
         <th>✓</th><th>Тип</th><th>Наименование</th><th>Ед.изм.</th>
         <th>Кол-во, ед.</th><th>Цена руб. с НДС</th><th>Сумма с НДС</th>
-        <th>Σ Матер. (×Kм)</th><th>Σ Работа (×Kr)</th><th>Вставка</th><th>Действия</th>
+        <th>Σ Матер. (×Kм)</th><th>Σ Работа (×Kr)</th><th>Действия</th>
       </tr></thead>
       <tbody></tbody>
       <tfoot><tr>
         <td colspan="6" class="right"><b>ИТОГО</b></td>
-        <td id="tot-mat">0</td><td id="tot-work">0</td><td id="tot-all">0</td><td colspan="2"></td>
+        <td id="tot-mat">0</td><td id="tot-work">0</td><td id="tot-all">0</td><td></td>
       </tr></tfoot>
     </table></div>
-    <datalist id="dict-list-m"></datalist>
-    <datalist id="dict-list-w"></datalist>
+    <datalist id="dict-list-all"></datalist>
   </div>
 
   <!-- СМЕТА -->
@@ -198,25 +190,43 @@
 
 <!-- ================= СПРАВОЧНИК МАТЕРИАЛОВ И РАБОТ ================= -->
 <section id="view-sprav" class="view hidden">
-  <div class="toolbar">
-    <h2>Справочник материалов и работ</h2>
-    <button id="btn-sprav-add-m" class="btn primary">＋ Материал</button>
-    <button id="btn-sprav-add-w" class="btn">＋ Работа</button>
-    <button id="btn-sprav-reset" class="btn danger" title="Вернуть исходные данные из Excel-книги">↺ Из оригинала</button>
+  <div class="sheet-tabs" id="sprav-tabs">
+    <button class="sheet-tab sprav-tab active" data-sprav="m">📦 Материалы (<span id="sprav-m-count2">0</span>)</button>
+    <button class="sheet-tab sprav-tab" data-sprav="w">🔧 Работы (<span id="sprav-w-count2">0</span>)</button>
   </div>
-  <p class="hint">Заполнен из данных исходной книги (1178 строк). Используется редактором заказа: при вводе наименования автоподстановка ед.изм. и цены; кнопка «→ Заказ» добавляет позицию в открытый заказ.</p>
-  <h3>Материалы (<span id="sprav-m-count">0</span>)
-      <input id="sprav-search-m" class="search" placeholder="Поиск по названию…"></h3>
-  <div class="scroll-wrap"><table class="grid compact editable" id="sprav-m-table">
-    <thead><tr><th>№</th><th>Наименование</th><th>Ед.изм.</th><th>Цена руб. с НДС</th><th></th></tr></thead>
-    <tbody id="sprav-m-tbody"></tbody>
-  </table></div>
-  <h3>Работы (<span id="sprav-w-count">0</span>)
-      <input id="sprav-search-w" class="search" placeholder="Поиск по названию…"></h3>
-  <div class="scroll-wrap"><table class="grid compact editable" id="sprav-w-table">
-    <thead><tr><th>№</th><th>Наименование</th><th>Ед.изм.</th><th>Цена руб. с НДС</th><th></th></tr></thead>
-    <tbody id="sprav-w-tbody"></tbody>
-  </table></div>
+
+  <!-- ОКНО 1: СПРАВОЧНИК МАТЕРИАЛОВ -->
+  <div class="panel" id="sprav-win-m">
+    <div class="toolbar">
+      <h2>Справочник материалов</h2>
+      <input id="sprav-search-m" class="search" placeholder="Поиск по названию…">
+      <button id="btn-sprav-add-m" class="btn primary">＋ Материал</button>
+      <button id="btn-sprav-reset" class="btn danger" title="Вернуть исходные данные из Excel-книги">↺ Из оригинала</button>
+      <span class="spacer"></span>
+      <span class="tagline">Всего: <span id="sprav-m-count">0</span></span>
+    </div>
+    <p class="hint">Заполнен из данных исходной книги. Используется редактором заказа: при выборе наименования позиции из справочника — Тип, Ед.изм. и Цена проставляются САМИ; кнопка «→ Заказ» добавляет позицию в открытый заказ.</p>
+    <div class="scroll-wrap"><table class="grid compact editable" id="sprav-m-table">
+      <thead><tr><th>№</th><th>Наименование</th><th>Ед.изм.</th><th>Цена руб. с НДС</th><th></th></tr></thead>
+      <tbody id="sprav-m-tbody"></tbody>
+    </table></div>
+  </div>
+
+  <!-- ОКНО 2: СПРАВОЧНИК РАБОТ -->
+  <div class="panel hidden" id="sprav-win-w">
+    <div class="toolbar">
+      <h2>Справочник работ</h2>
+      <input id="sprav-search-w" class="search" placeholder="Поиск по названию…">
+      <button id="btn-sprav-add-w" class="btn primary">＋ Работа</button>
+      <span class="spacer"></span>
+      <span class="tagline">Всего: <span id="sprav-w-count">0</span></span>
+    </div>
+    <p class="hint">Отдельное окно справочника работ. При выборе наименования позиции из справочника в редакторе заказа — Тип, Ед.изм. и Цена проставляются САМИ; кнопка «→ Заказ» добавляет позицию в открытый заказ.</p>
+    <div class="scroll-wrap"><table class="grid compact editable" id="sprav-w-table">
+      <thead><tr><th>№</th><th>Наименование</th><th>Ед.изм.</th><th>Цена руб. с НДС</th><th></th></tr></thead>
+      <tbody id="sprav-w-tbody"></tbody>
+    </table></div>
+  </div>
 </section>
 
 <!-- ================= КОНТРАГЕНТЫ ================= -->
