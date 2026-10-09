@@ -39,12 +39,13 @@ C.calcMaterials = function(order){
   const Km=C.num(order.meta.coefMat??1), Kr=C.num(order.meta.coefWork??1);
   let pos=0, sumMat=0, sumWork=0;
   order.rows.forEach(row=>{
+    if(!row.t || C.isEmptyRow(row)){ row.pp=0; return; }     // заголовки/пустые — без позиции
     const q=C.num(row.q), p=C.num(row.p);
-    row.sum = (q&&p)? r2(q*p) : (row.t? r2(q*p):0);         // H = F*G
-    row.I = (row.t==='Материалы') ? r2(row.sum*Km) : 0;     // Σ матер с коэфф
-    row.J = (row.t==='Работа')    ? r2(row.sum*Kr) : 0;     // Σ работа с коэфф
-    row.L = (row.t==='Материалы') ? r2(p*Km) : (row.t==='Работа'? r2(p*Kr):0); // цена с коэфф
-    if(row.t) pos++;
+    row.sum = r2(q*p);                                       // H = F*G
+    row.I = (row.t==='Материалы') ? r2(row.sum*Km) : 0;      // Σ матер с коэфф
+    row.J = (row.t==='Работа')    ? r2(row.sum*Kr) : 0;      // Σ работа с коэфф
+    row.L = (row.t==='Материалы') ? r2(p*Km) : (row.t==='Работа'? r2(p*Kr):0); // L = цена с коэфф
+    pos++;
     row.pp = pos;                                            // A=IF(F>0,COUNTIF(">0"))
     sumMat+=row.I; sumWork+=row.J;
   });
@@ -52,75 +53,144 @@ C.calcMaterials = function(order){
 };
 
 /* ---------- Нумерация позиций для Сметы/КС-6 ----------
-   позиция = порядковый номер строки-предмет (t!=null), как в Excel B8=Материалы!A8 */
+   Позиция = порядковый номер непустой строки Материалов (Смета!B8=Материалы!A8..A2002,
+   где А = COUNTIF по непустым строкам). Пустые q/p строки НЕ занимают позицию
+   и не попадают ни в КС-6, ни в КС-2. */
+C.isEmptyRow = r => !(C.num(r.q)>0 || C.num(r.p)>0 || String(r.n||'').trim()!=='');
+
 C.positions = function(order){
   const arr=[];
-  order.rows.forEach((row,i)=>{ if(row.t) arr.push({idx:i,pos:arr.length+1,row}); });
-  return arr; // pos начинается с 1
+  order.rows.forEach((row,i)=>{
+    if(!row.t || C.isEmptyRow(row)) return;      // пустые строки позицию не занимают
+    arr.push({idx:i,pos:arr.length+1,row});      // pos = Материалы!A (нумерация непустых строк)
+  });
+  return arr;
+};
+
+/* --- объединённая позиция Сметы (Материалы + Работа одной позиции, как G8/H8 в Excel) --- */
+C.smetaOf = function(order){
+  C.calcMaterials(order);
+  const map={};
+  order.rows.forEach((row,i)=>{
+    if(!row.t || C.isEmptyRow(row)) return;
+    const pos=row.pp;
+    if(!map[pos]) map[pos]={pos,name:row.n,u:row.u||'',qty:C.num(row.q),priceNds:C.num(row.L),
+                            costMat:0,costUsl:0,idxs:[],type:row.t};
+    const m=map[pos];
+    m.idxs.push(i);
+    m.costMat=r2(m.costMat+(row.I||0));          // Смета!G = Материалы!I
+    m.costUsl=r2(m.costUsl+(row.J||0));          // Смета!H = Материалы!J
+    if(row.t==='Работа'){                          // цена/кол-во — из строки работы (Смета E/F)
+      if(C.num(row.q)>0) m.qty=C.num(row.q);
+      if(C.num(row.L)>0) m.priceNds=C.num(row.L);
+      if(!m.name) m.name=row.n;
+    } else if(C.num(row.L)>0 && m.priceNds===0) m.priceNds=C.num(row.L);
+  });
+  return Object.values(map).sort((a,b)=>a.pos-b.pos);
 };
 
 /* ---------- СМЕТА (без НДС) + месячные колонки закрытия ---------- */
 C.SMETA_NDS = order => (order.meta.ndsMode==='НДС 5%') ? 5/105 : 22/122;
 
+/* Полная модель листа «Смета»: строки позиций + месячные колонки Q,T,W,...AY
+   Формулы-источники:
+     B..H = прямые ссылки на Материалы A,C,D,E,L,F,I,J (позиции непустых строк)
+     Q4  = дата закрытия месяца m (Объемы закрытия!A1 = КС-6!F32)
+     Q8  = VLOOKUP(B8;'Объемы закрытия'!A:B;2;0) — объём позиции в месяце
+     R8  = Q8*E8 ; J8 = Σ Q8+T8+...+AX8 ; K8 = J8*E8
+     N8  = F8-Q8-...-AX8 ; O8 = N8*E8
+     Q3  = Q5-ROUND(Q5*22/122) (или *5/105) — сумма месяца без НДС
+     J2  = SUMIF(даты<=Дата_КС2, суммы с НДС) ; K3 = SUMIF(..., безНДС)
+     N2/O3 — то же с условием YEAR(дата)=YEAR(Дата_КС2); I3 = COUNTIF(N8:N93,"<0") */
 C.calcSmeta = function(order){
   C.calcMaterials(order);
   const ks2date=C.parseD(order.meta.ks2date);
-  const months=C.months(order);                    // [{i,date,status,volsKey}]
-  const P=C.positions(order);
+  const months=C.months(order);
   const frac=C.SMETA_NDS(order);
-  const sm=P.map(({pos,row})=>{
-    const priceNds=row.L||0;                        // E = Материалы!L (цена с коэфф, но без НДС ниже)
-    // В Excel Смета!E = Материалы!L (полная цена). Стоимость G/H = I/J материалов (с коэфф, с НДС)
-    const costMat=row.I, costUsl=row.J;             // G,H (руб с НДС)
-    const doneQty={}, monthSum={};                  // по индексам месяцев
-    let doneAll=0;
+  const items=C.positions(order);
+  const smap={};
+  items.forEach(p=>{ smap[p.pos]={pos:p.pos,idxs:[p.idx],name:p.row.n,u:p.row.u||'',
+      qty:C.num(p.row.q),priceNds:C.num(p.row.L),costMat:p.row.I||0,costUsl:p.row.J||0,
+      monthVol:{},doneAll:0}; });
+  // объединение соседних строк одной позиции (Материалы+Работа → G/H суммируются, E/F из работы)
+  for(let k=items.length-1;k>0;k--){
+    const a=items[k-1], b=items[k];
+    if(a.row.pp===b.row.pp){
+      const m=smap[a.pos], o=smap[b.pos];
+      m.idxs.push(...o.idxs);
+      m.costMat=r2(m.costMat+o.costMat); m.costUsl=r2(m.costUsl+o.costUsl);
+      if(b.row.t==='Работа'){ m.qty=o.qty||m.qty; m.priceNds=o.priceNds||m.priceNds; m.name=o.name||m.name; m.u=o.u||m.u; }
+      delete smap[b.pos];
+      items.splice(k,1);
+    }
+  }
+  const sm=items.map(p=>smap[p.pos]).filter(Boolean);
+  sm.forEach(x=>{
     months.forEach(m=>{
-      const v=C.num((order.vols[pos]||{})['m'+m.i]);
-      m.volByPos=m.m||('m'+m.i);
-      doneAll+=v;
-      monthSum[m.i]=v*(priceNds||0);
+      const v=C.num((order.vols[x.pos]||{})['m'+m.i]);
+      x.monthVol[m.i]=v; x.doneAll+=v;
     });
-    const qty=C.num(row.q);
-    return {pos,name:row.n,u:row.u,price:priceNds,qty,costMat,costUsl,
-            doneAll, doneSum:r2(doneAll*(priceNds||0)),
-            rest:Math.max(qty-doneAll,0), restSum:r2(Math.max(qty-doneAll,0)*(priceNds||0)),
-            monthVol:monthSum};
+    x.doneSum=r2(x.doneAll*x.priceNds);
+    x.rest=x.qty-x.doneAll;                     // N8 (может быть <0 — как в Excel)
+    x.restSum=r2(x.rest*x.priceNds);
   });
   order.smeta=sm;
-  // Итоги Смета: G3=SUM(G8:H..) стоимость; J2/K3/N2/O3 — выполнено (в ценах сметы без НДС через вычитание НДС)
-  const totalCost=r2(sm.reduce((s,x)=>s+x.costMat+x.costUsl,0));       // Смета!G3 (с НДС)
-  let doneToKs2=0, ytdToKs2=0;
-  sm.forEach(x=>{
-    // "выполнено на момент печати": сумма объёмов закрытий с датой <= Дата_КС2 × цена
-    let vol=0, volYtd=0;
-    months.forEach(m=>{
-      if(m.date && ks2date && m.date<=ks2date){
-        const v=C.num((order.vols[x.pos]||{})['m'+m.i]);
-        vol+=v;
-        if(m.date.getFullYear()===ks2date.getFullYear()) volYtd+=v;
-      }
-    });
-    doneToKs2+=vol*x.price; ytdToKs2+=volYtd*x.price;
+  // суммы по месяцам (аналог строк Q3/Q5): только месяцы с датой и статусом Закрытие
+  months.forEach(m=>{
+    let moneyNds=0;
+    sm.forEach(x=>{ const v=x.monthVol[m.i]||0; if(v) moneyNds+=r2(v*x.priceNds); });
+    m.moneyWithNds=r2(moneyNds);                          // ≈ Смета!Q5 (в ценах с НДС)
+    m.moneyNoNds=r2(moneyNds - r2(moneyNds*frac));        // ≈ Смета!Q3 (без НДС)
+  });
+  const totalCost=r2(sm.reduce((s,x)=>s+x.costMat+x.costUsl,0));   // Смета!G3 (с НДС)
+  let doneNds=0, doneNoNds=0, ytdNds=0, ytdNoNds=0;
+  months.forEach(m=>{
+    if(m.date && ks2date && m.date<=ks2date){
+      doneNds+=m.moneyWithNds; doneNoNds+=m.moneyNoNds;
+      if(m.date.getFullYear()===ks2date.getFullYear()){ ytdNds+=m.moneyWithNds; ytdNoNds+=m.moneyNoNds; }
+    }
   });
   order.smetaTotals={
-    total:totalCost,                                   // G3
-    doneNds:r2(doneToKs2),                             // J2 (в ценах с НДС → ниже без НДС)
-    doneNoNds:r2(doneToKs2 - r2(doneToKs2*frac)),      // ≈ J2 при "Без НДС" режиме
-    ytd:r2(ytdToKs2)
+    total:totalCost,                                  // G3
+    doneNds:r2(doneNds),                              // J2 (в ценах с НДС)
+    doneNoNds:r2(doneNoNds),                          // K3 (без НДС)
+    ytd:r2(ytdNds),                                   // N2
+    ytdNoNds:r2(ytdNoNds),                            // O3
+    negCount:sm.filter(x=>x.rest<0).length            // I3
   };
   return months;
 };
 
-/* ---------- Месяцы КС-6: даты авто (F32=Дата1, далее +31), статус ---- */
+/* ---------- Месяцы КС-6: 9 колонок «Выполнено (месяц)» ----------
+   Строка дат в Excel: F32 — дата первого закрытия, далее +31 день (G32=F32+31...).
+   Формат отображения: mmmm yyyy → «Август 2026». Месяц и год редактируются
+   раздельно (meta.mmyy[i] = {m:0..11, y:год}); при смене месяца/года пересчёт
+   даты закрытия = 1-е число выбранных месяца/года. */
+C.MONTH_NAMES=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август',
+               'Сентябрь','Октябрь','Ноябрь','Декабрь'];
+C.fmtMY = d => d ? C.MONTH_NAMES[d.getMonth()]+' '+d.getFullYear() : '';
+
 C.months = function(order){
   const res=[];
-  const base=C.parseD(order.meta.ks2date);
   for(let i=0;i<9;i++){
-    let d=C.parseD((order.meta.dates||[])[i]);
-    if(!d && base) d=C.addDays(base,i*31);            // G32=F32+31, H32=G32+31 ...
+    let d=null;
+    const mm=(order.meta.mmyy||[])[i];
+    if(mm && mm.y) d=new Date(mm.y,(mm.m??0),1);
+    if(!d) d=C.parseD((order.meta.dates||[])[i]);
+    if(!d){                                   // авто: первая дата = Дата_КС2 (или сегодня), далее +31
+      const base=C.parseD(order.meta.ks2date)||new Date();
+      d=C.addDays(base,i*31);
+    }
     res.push({i,date:d,status:(order.meta.status||[])[i]==='Закрытие'?'Закрытие':'----'});
   }
   return res;
+};
+
+/* Установка месяца/ года закрытия i (аналог смены формата mmmm/yyyy ячейки F32:N32) */
+C.setMonthYear = function(order,i,m,y){
+  if(!order.meta.mmyy) order.meta.mmyy=[];
+  order.meta.mmyy[i]={m:m,y:y};
+  order.meta.dates[i]=new Date(y,m,1).toISOString().slice(0,10);
 };
 
 /* ---------- ОБЪЕМЫ ЗАКРЫТИЯ (аналог листа «Объемы закрытия») ---------- */
