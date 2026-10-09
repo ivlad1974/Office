@@ -18,11 +18,19 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 .btn.danger{color:#b00}
 .btn.mini{padding:2px 8px;font-size:12px}
 .hidden{display:none!important}
-table.grid{width:100%;border-collapse:collapse;background:var(--card);font-size:13px}
-.grid th,.grid td{border:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
-.grid thead th{background:var(--th);position:sticky;top:52px;z-index:1}
+/* Таблицы: ширина = по содержимому (НЕ растягиваем на всё окно),
+   table-layout:fixed — при перетаскивании одной колонки остальные не меняют ширину. */
+table.grid{width:auto;border-collapse:collapse;background:var(--card);font-size:13px;table-layout:fixed}
+.grid th,.grid td{border:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top;overflow:hidden}
+.grid thead th{background:var(--th);position:sticky;top:0;z-index:2}
 .grid .num{text-align:right;white-space:nowrap}
 .grid tfoot td{background:var(--tfoot);font-weight:600}
+/* Липкая шапка: прокрутка таблицы внутри контейнера — верхняя строка с именами
+   столбцов остаётся видимой (позиционируется относительно контейнера). */
+.scroll-wrap{position:relative;overflow:auto;max-height:calc(100vh - 150px)}
+.scroll-x{overflow-x:auto}
+.col-grip{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:3;user-select:none}
+.col-grip:hover{background:#1f5fbf55}
 tr.section-row td{background:var(--section)}
 input,select{font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:4px;max-width:100%}
 input.num{width:90px;text-align:right}
@@ -59,7 +67,11 @@ legend{font-weight:600;padding:0 6px}
 .doc.a4{background:var(--doc);border:1px solid var(--line);padding:26px;max-width:900px;margin:0 auto;line-height:1.5}
 .doc-head-line{font-size:12px;color:#556;border-bottom:1px solid var(--line);margin-bottom:8px}
 .center{text-align:center}
-.doc-table{margin:10px 0}
+.doc-table{margin:10px 0;width:100%;table-layout:auto}
+/* вложения (блоки «Объемы закрытия») — обычные таблицы, не липкие, без fixed-макета */
+.obem-block table.grid{table-layout:auto;width:100%}
+.obem-block table.grid thead th{position:static}
+@media print{.grid thead th{position:static}.scroll-wrap{overflow:visible;max-height:none}}
 .signs{display:flex;justify-content:space-between;margin-top:26px;gap:20px}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--top);color:#fff;padding:10px 18px;border-radius:8px;box-shadow:0 4px 14px #0004;z-index:99}
 .coef.mini{width:64px}

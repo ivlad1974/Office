@@ -49,6 +49,7 @@ function loadStore(){
     if(!store.dictMat.length) store.dictMat=d.mat;
     if(!store.dictWork.length) store.dictWork=d.work;
   }
+  invalidateDictIdx();
   save();
 }
 function seedOrder(){
@@ -68,7 +69,15 @@ function newBlankOrder(){
     rows:[{t:null,n:'1.Новый раздел',u:null,q:null,p:null},{t:'Материалы',n:'',u:'шт',q:0,p:0}],
     vols:{}};
 }
-function save(){ localStorage.setItem(LS,JSON.stringify(store)); }
+let _saveT=null;
+function saveNow(){
+  /* лёгкий кэш сумм открытого заказа для списка заказов (полный каскад здесь не гоняется) */
+  if(cur){ try{ C.calcMaterials(cur); cur._tot={all:cur.totals.all, ks2:(cur.ks2&&cur.ks2.total)||0}; }catch(e){} }
+  localStorage.setItem(LS,JSON.stringify(store));
+}
+/* сериализация+запись ~1 МБ JSON на КАЖДОЕ изменение ячейки подтормаживала UI —
+   автосохранение дебаунсим; критические места (печать/экспорт/закрытие) зовут saveNow() */
+function save(){ clearTimeout(_saveT); _saveT=setTimeout(saveNow,400); }
 let cur=null; // открытый заказ
 let curSheet='materials';
 
@@ -97,11 +106,13 @@ function renderOrders(){
   const q=$('#order-search').value.toLowerCase();
   const tb=$('#orders-table tbody'); tb.innerHTML='';
   store.orders.filter(o=>o.meta.objectName.toLowerCase().includes(q)).forEach((o,i)=>{
-    C.calcMaterials(o); C.calcKS2(o);
+    /* суммы берём из сохранённого кэша расчёта (order._tot) — полный пересчёт
+       КАЖДОГО заказа при каждой отрисовке списка был главным источником тормозов */
+    const t=o._tot||{};
     const tr=document.createElement('tr');
     tr.innerHTML=`<td>${i+1}</td><td>${esc(o.meta.objectName)}</td><td>${esc(o.meta.org)}</td>
       <td>${esc(o.meta.customerList)}</td><td>${o.meta.dogovorDate||''}</td>
-      <td class="num">${C.money(o.totals.all)}</td><td class="num">${C.money(o.ks2.total)}</td>
+      <td class="num">${C.money(t.all||0)}</td><td class="num">${C.money(t.ks2||0)}</td>
       <td>${o.created.slice(0,10)}</td>
       <td><button class="btn mini" data-open="${o.id}">Открыть</button>
           <button class="btn mini danger" data-del="${o.id}">✕</button></td>`;
@@ -112,7 +123,8 @@ function renderOrders(){
   tb.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
     if(await askConfirm('Удалить заказ?')){store.orders=store.orders.filter(o=>o.id!==b.dataset.del);save();renderOrders();}});
 }
-$('#order-search').oninput=renderOrders;
+/* поиск по списку заказов — с дебаунсом (не перерисовывать на каждый символ) */
+let _ordT=null; $('#order-search').oninput=()=>{clearTimeout(_ordT);_ordT=setTimeout(renderOrders,150);};
 $('#btn-new-order').onclick=()=>{const o=newBlankOrder();store.orders.push(o);save();openEditor(o);};
 
 /* ================= РЕДАКТОР: шапка ================= */
@@ -137,12 +149,23 @@ function fillHeader(){
   $('#hdr-coefw').onchange=e=>{cur.meta.coefWork=C.num(e.target.value);$('#f-coefw').value=e.target.value;recalcAll();};
 }
 function bindH(sel,key){$(sel).onchange=e=>{cur.meta[key]=e.target.value; recalcAll();};}
-function recalcAll(){ if(!cur)return; C.calcKS3(cur); ["materials","smeta","ks6"].forEach(n=>{const el=document.getElementById("panel-"+n);if(el&&!el.classList.contains("hidden"))renderSheet(n);}); save(); }  // автосохранение заказа
+/* Лёгкий пересчёт: только видимый лист (Материалы/Смета/КС-6) + автосохранение.
+   Раньше на каждое изменение ячейки гнался весь каскад КС-3→КС-2→Объемы→Смета и
+   перерисовывались все панели — на 1178 строках это «вешало» интерфейс. */
+function recalcAll(){ if(!cur)return;
+  const vis=['materials','smeta','ks6'].find(n=>{const el=document.getElementById('panel-'+n);return el&&!el.classList.contains('hidden');});
+  if(vis) renderSheet(vis); else C.calcMaterials(cur);
+  save();
+}
+/* Полный каскад — только когда он реально нужен: печать/экспорт/переключение на
+   листы КС-2/КС-3/Экспорт (см. renderSheet). */
+function fullRecalc(){ if(cur) C.calcKS3(cur); }
 function renderCurrent(){ renderSheet($('.sheet-tab.active').dataset.sheet||'materials'); }
 
 /* ================= ЛИСТЫ ================= */
 function renderSheet(name){
   if(!cur) return;
+  if(name==='ks2'||name==='ks3'||name==='export') fullRecalc();   // тяжёлые документы — считаем по требованию
   if(name==='materials') renderMaterials();
   if(name==='smeta') renderSmeta();
   if(name==='ks6'){ renderKs6(); renderObems(); }   // объемы закрытия — внутри панели КС-6, без дублей
@@ -170,15 +193,27 @@ function rowsInDom(){ return $$('#mat-table tbody tr').map(tr=>{
   const el=tr.querySelector('[data-i]'); return el?+el.dataset.i:-1; }).filter(i=>i>=0); }
 function dictLookup(name,t){
   const k=(name||'').trim().toLowerCase(); if(!k) return null;
-  const src = t==='Работа'? store.dictWork : t==='Материалы'? store.dictMat : (store.dictMat.concat(store.dictWork));
-  const hit=src.find(d=>d.n.trim().toLowerCase()===k);
-  return hit||null;
+  const ix=getDictIdx();
+  if(t==='Работа') return ix.w.get(k)||null;
+  if(t==='Материалы') return ix.m.get(k)||null;
+  return ix.m.get(k)||ix.w.get(k)||null;
 }
+/* Индексы справочников по нижнему регистру наименования — O(1) вместо полного
+   перебора массивов (в т.ч. concat двух массивов на каждую отредактированную строку). */
+const dictIdx={m:null,w:null};
+function getDictIdx(){
+  if(!dictIdx.m||!dictIdx.w){
+    dictIdx.m=new Map(store.dictMat.map(d=>[d.n.trim().toLowerCase(),d]));
+    dictIdx.w=new Map(store.dictWork.map(d=>[d.n.trim().toLowerCase(),d]));
+  }
+  return dictIdx;
+}
+function invalidateDictIdx(){ dictIdx.m=dictIdx.w=null; }
 /* Автоопределение ТИПА по справочнику: наименование есть только в работах — «Работа»,
    только в материалах — «Материалы»; если не найдено — оставляем текущий тип. */
 function dictTypeOf(k){
-  const inM=store.dictMat.some(d=>d.n.trim().toLowerCase()===k);
-  const inW=store.dictWork.some(d=>d.n.trim().toLowerCase()===k);
+  const ix=getDictIdx();
+  const inM=ix.m.has(k), inW=ix.w.has(k);
   if(inW&&!inM) return 'Работа';
   if(inM&&!inW) return 'Материалы';
   return null;
@@ -350,35 +385,83 @@ function renumberVols(){ /* позиции после удаления/доба�
 /* ---- Автоширина + ручное изменение ширины столбцов ----
    Колонки получают ширину по содержимому (autoFitColumns), затем пользователь
    может тянуть за правую границу <th> (col-grip) или двойным кликом по границе
-   вернуть автоширину. Работает для всех таблиц приложения. */
-function measureColWidth(table,ci){
-  let max=0;
-  table.querySelectorAll('tr').forEach(tr=>{
-    const td=tr.children[ci]; if(!td) return;
-    const inp=td.querySelector('input,select');
-    const probe=document.createElement('span');
-    probe.style.cssText='position:absolute;visibility:hidden;white-space:nowrap;font-family:"Segoe UI",Arial,sans-serif;font-size:13px;padding:0 14px;font-weight:'+(td.closest('thead')?'600':'400');
-    probe.textContent=(inp?(inp.value??inp.textContent??''):td.textContent)||'';
-    document.body.appendChild(probe); const w=probe.offsetWidth; probe.remove();
-    if(w>max) max=w;
+   вернуть автоширину. Работает для всех таблиц приложения.
+
+   ПРОИЗВОДИТЕЛЬНОСТЬ: раньше ширина каждой колонки измерялась перебором ВСЕХ
+   строк таблицы с созданием скрытого <span> на КАЖДУЮ ячейку и вставкой его в
+   document.body (cols × rows перерасчётов макета — «Материалы» открывались
+   очень долго). Теперь измерения выполняются ОДНИМ пакетом: все probe-элементы
+   собираются во fragment, одна вставка в DOM, одно чтение offsetWidth, один
+   removeChild. Дополнительно: ограничиваем число измеряемых строк (первые
+   MAX_MEASURE_ROWS) и кэшируем результат измерения колонок таблицы.
+
+   ПОВЕДЕНИЕ ПРИ ИЗМЕНЕНИИ ШИРИНЫ: таблица больше НЕ растягивается на всю ширину
+   окна (width:auto вместо width:100%), а остальные столбцы НЕ подстраиваются
+   (table-layout:fixed) — тянем один столбец, все остальные остаются как есть. */
+const MAX_MEASURE_ROWS=60;                    // достаточно для оценки автоширины
+function measureColWidths(table){
+  const headRow=table.querySelector('thead tr'); if(!headRow) return [];
+  const nCols=headRow.children.length;
+  /* границы колонок с учётом colspan (заголовок раздела в «Материалах» = colspan 7) */
+  const colCells=[];                          // colCells[ci] = [{cell,isHead}]
+  for(let ci=0;ci<nCols;ci++) colCells.push([]);
+  const rows=[...table.querySelectorAll('tr')].slice(0,MAX_MEASURE_ROWS);
+  rows.forEach(tr=>{
+    let ci=0;
+    [...tr.children].forEach(cell=>{
+      const span=Math.max(1,+cell.getAttribute('colspan')||1);
+      for(let k=0;k<span&&ci<nCols;k++,ci++){
+        if(colCells[ci].length<MAX_MEASURE_ROWS) colCells[ci].push({cell,isHead:!!cell.closest('thead')});
+      }
+    });
   });
-  return Math.min(Math.max(max+6,42),520);
+  /* один оффскрин-контейнер, одна вставка в документ, одно чтение ширин */
+  const host=document.createElement('div');
+  host.style.cssText='position:absolute;left:-99999px;top:0;visibility:hidden;white-space:nowrap;font-family:"Segoe UI",Arial,sans-serif';
+  const compact=table.classList.contains('compact');
+  const groups=[];                            // группы span'ов по колонкам (flex-колонка)
+  for(let ci=0;ci<nCols;ci++){
+    const g=document.createElement('div');
+    g.style.cssText='display:flex;flex-direction:column;align-items:flex-start;width:max-content';
+    colCells[ci].forEach(({cell,isHead})=>{
+      const inp=cell.querySelector('input,select');
+      const text=((inp&&inp.value)?inp.value:(cell.textContent||'')).trim().slice(0,200);
+      const span=document.createElement('span');
+      span.style.cssText='box-sizing:border-box;white-space:nowrap;padding:'+(compact?'2px 6px':'4px 8px')+
+        ';font-size:'+(compact?'12px':'13px')+';font-weight:'+(isHead?'600':'400');
+      span.textContent=text;
+      g.appendChild(span);
+    });
+    groups.push(g); host.appendChild(g);
+  }
+  document.body.appendChild(host);            // единственная вставка в DOM
+  const widths=[];
+  for(let ci=0;ci<nCols;ci++){
+    let max=0;
+    groups[ci].childNodes.forEach(s=>{const w=s.offsetWidth;if(w>max)max=w;});
+    widths[ci]=Math.min(Math.max(max+6,42),520);
+  }
+  host.remove();
+  return widths;
 }
 function autoFitColumns(sel){
   const table=document.querySelector(sel); if(!table||!table.querySelector('thead tr')) return;
   const headRow=table.querySelector('thead tr');
   const nCols=headRow.children.length;
+  /* сброс кэша при изменении числа строк/столбцов (таблица перерисована) */
+  const sig=nCols+'|'+table.querySelectorAll('tbody tr').length;
+  if(table._fitSig!==sig){ table._fitCache=null; table._fitSig=sig; }
+  if(!table._fitCache) table._fitCache=measureColWidths(table);
   for(let ci=0;ci<nCols;ci++){
     const th=headRow.children[ci];
-    if(th._userWidth) continue;              // не трогаем колонки, которые менял пользователь
-    th.style.width=measureColWidth(table,ci)+'px';
+    if(th._userWidth) continue;               // не трогаем колонки, которые менял пользователь
+    th.style.width=table._fitCache[ci]+'px';
   }
   ensureResizers(table);
 }
 function ensureResizers(table){
   if(table._resized) return; table._resized=true;
   table.querySelectorAll('thead th').forEach(th=>{
-    th.style.position='relative';
     const g=document.createElement('div'); g.className='col-grip';
     th.appendChild(g);
     g.addEventListener('mousedown',e=>{
@@ -389,8 +472,10 @@ function ensureResizers(table){
       document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
     });
     g.addEventListener('dblclick',e=>{ e.stopPropagation();
+      table._fitCache=null;                   // содержимое могло измениться — перемерить
       const ci=[...th.parentNode.children].indexOf(th);
-      th._userWidth=false; th.style.width=measureColWidth(table,ci)+'px';
+      if(!table._fitCache) table._fitCache=measureColWidths(table);
+      th._userWidth=false; th.style.width=table._fitCache[ci]+'px';
     });
   });
 }
@@ -454,7 +539,7 @@ function renderKs6(){
       const y=t.hasAttribute('data-yy')?+t.value:mm.y;
       C.setMonthYear(cur,i,m,y);   // при смене МЕСЯЦА последующие столбцы сдвигаются авто по порядку
       renderKs6();                 // перерисовать шапку: каскад виден сразу, без потери фокуса на году
-      C.calcKS3(cur); renderSmeta(); renderObems(); save();
+      C.calcSmeta(cur); renderSmeta(); renderObems(); save();
       return;
     }
     recalcAll();
@@ -493,7 +578,8 @@ function renderKs6(){
     cur.vols=pos in cur.vols?cur.vols:{...cur.vols};
     if(!cur.vols[pos]) cur.vols[pos]={};
     if(val>0) cur.vols[pos]['m'+m]=val; else delete cur.vols[pos]['m'+m];
-    recalcAll();
+    /* только Смета + Объемы: полный каскад КС-2/КС-3 — по требованию (печать/экспорт/их листы) */
+    C.calcSmeta(cur); renderSmeta(); renderObems(); save();
   });
   autoFitColumns('#ks6-table');
 }
@@ -564,24 +650,24 @@ function renderExport(){
 }
 
 /* ---- кнопки тулбара редактора ---- */
-$('#btn-save-order').onclick=()=>{save();toast('Заказ сохранён в браузере (localStorage)');};
+$('#btn-save-order').onclick=()=>{saveNow();toast('Заказ сохранён в браузере (localStorage)');};
 $('#btn-export-reestr').onclick=()=>{
-  C.calcKS3(cur);
+  fullRecalc(); if(cur.ks2&&cur._tot) cur._tot.ks2=cur.ks2.total;
   const row=C.exportRow(cur);
   const ex=store.r2.find(r=>r.object===row.object);
   if(ex){Object.assign(ex,row);toast('Запись обновлена в Реестре 2 (аналог «Переписать?» → Да)');}
   else{store.r2.push(row);toast('Новая запись добавлена в Реестр 2');}
-  save(); renderR2();
+  saveNow(); renderR2();
 };
-$('#btn-print-ks2').onclick=()=>printDoc('ks2-doc');
-$('#btn-print-ks3').onclick=()=>printDoc('ks3-doc');
+$('#btn-print-ks2').onclick=()=>{fullRecalc();if(cur._tot&&cur.ks2)cur._tot.ks2=cur.ks2.total;save();printDoc('ks2-doc');};
+$('#btn-print-ks3').onclick=()=>{fullRecalc();save();printDoc('ks3-doc');};
 $('#btn-print-ks6').onclick=()=>{renderKs6();renderObems();printArea('#panel-ks6');};
 $('#btn-download-zip').onclick=()=>{
   const blob=new Blob([JSON.stringify(cur,null,1)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='Заказ_'+(cur.meta.objectName||'new')+'.json';a.click();
 };
-$('#btn-close-order').onclick=()=>{$('#view-editor').classList.add('hidden');$('#view-orders').classList.remove('hidden');renderOrders();};
+$('#btn-close-order').onclick=()=>{saveNow();$('#view-editor').classList.add('hidden');$('#view-orders').classList.remove('hidden');renderOrders();};
 function switchSheet(k){curSheet=k;$$('.sheet-tab').forEach(b=>b.classList.toggle('active',b.dataset.sheet===k));renderSheet(k);}
 /* печать активной таблицы (Материалы/Смета/КС-6) — отдельная кнопка */
 const PRINT_MAP={materials:'#panel-materials',smeta:'#panel-smeta',ks6:'#panel-ks6',ks2:'#panel-ks2',ks3:'#panel-ks3',export:'#panel-export'};
@@ -672,12 +758,12 @@ function renderSprav(){
     tb.querySelectorAll('input').forEach(inp=>inp.onchange=e=>{
       const d=store[key][+e.target.dataset.i];
       d[e.target.dataset.k]=(e.target.dataset.k==='p')?C.num(e.target.value):e.target.value;
-      save();
+      invalidateDictIdx(); save();
     });
     tb.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
       const d=store[key][+b.dataset.del];
       if(!await askConfirm(`Удалить из справочника: «${String(d.n).slice(0,80)}»?`)) return;
-      store[key].splice(+b.dataset.del,1);save();renderSprav();});
+      store[key].splice(+b.dataset.del,1);invalidateDictIdx();save();renderSprav();});
     tb.querySelectorAll('[data-addorder]').forEach(b=>b.onclick=()=>{
       if(!cur) return toast('Сначала откройте заказ (вкладка Заказы → Открыть)');
       const d=store[key][+b.dataset.i];
@@ -686,13 +772,13 @@ function renderSprav(){
     });
   });
 }
-$('#btn-sprav-add-m').onclick=()=>{store.dictMat.unshift({n:'Новый материал',u:'шт',p:0});save();renderSprav();};
-$('#btn-sprav-add-w').onclick=()=>{store.dictWork.unshift({n:'Новая работа',u:'шт',p:0});save();renderSprav();};
+$('#btn-sprav-add-m').onclick=()=>{store.dictMat.unshift({n:'Новый материал',u:'шт',p:0});invalidateDictIdx();save();renderSprav();};
+$('#btn-sprav-add-w').onclick=()=>{store.dictWork.unshift({n:'Новая работа',u:'шт',p:0});invalidateDictIdx();save();renderSprav();};
 $('#sprav-search-m').oninput=e=>{spravFilter.m=e.target.value.toLowerCase();renderSprav();};
 $('#sprav-search-w').oninput=e=>{spravFilter.w=e.target.value.toLowerCase();renderSprav();};
 $('#btn-sprav-reset').onclick=()=>{
   if(!confirm('Перезаполнить справочники из данных исходной Excel-книги? Ваши правки будут потеряны.'))return;
-  const d=buildDictsFromSeed(); store.dictMat=d.mat; store.dictWork=d.work; save(); renderSprav();
+  const d=buildDictsFromSeed(); store.dictMat=d.mat; store.dictWork=d.work; invalidateDictIdx(); save(); renderSprav();
   toast('Справочники восстановлены из оригинала');
 };
 
