@@ -204,11 +204,14 @@ function renderKs6(){
       if(!cur.meta.status||cur.meta.status.length!==9) cur.meta.status=Array(9).fill('----');
       if(t.value==='Закрытие') cur.meta.status.fill('----');   // ровно один «Закрытие»
       cur.meta.status[i]=t.value;
-    } else {                                             // смена месяца / года в шапке
+    } else {                       // смена месяца / года в шапке (только в «Закрытии»)
       const mm=cur.meta.mmyy[i];
       const m=t.hasAttribute('data-mm')?+t.value:mm.m;
       const y=t.hasAttribute('data-yy')?+t.value:mm.y;
-      C.setMonthYear(cur,i,m,y);
+      C.setMonthYear(cur,i,m,y);   // при смене МЕСЯЦА последующие столбцы сдвигаются авто по порядку
+      renderKs6();                 // перерисовать шапку: каскад виден сразу, без потери фокуса на году
+      C.calcKS3(cur); renderSmeta(); renderObems(); save();
+      return;
     }
     recalcAll();
   };
@@ -385,6 +388,18 @@ $('#btn-cust-add').onclick=()=>{store.customers.push({list:'Новый зака�
 /* ================= utils ================= */
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toast(t){const el=$('#toast');el.textContent=t;el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),2500);}
+
+/* ================= ТЕМЫ (светлая/тёмная/синяя/сепия) ================= */
+const THEMES={light:'Светлая',dark:'Тёмная',blue:'Синяя',sepia:'Сепия'};
+function applyTheme(t){
+  document.body.dataset.theme=t;
+  const sel=$('#theme-select'); if(sel) sel.value=t;
+  try{localStorage.setItem('mes_theme',t);}catch(e){}
+}
+$('#theme-select').onchange=e=>applyTheme(e.target.value);
+let savedTheme='light'; try{savedTheme=localStorage.getItem('mes_theme')||'light';}catch(e){}
+if(!THEMES[savedTheme]) savedTheme='light';
+applyTheme(savedTheme);
 
 loadStore(); renderOrders();
 })();

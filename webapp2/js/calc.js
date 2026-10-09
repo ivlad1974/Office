@@ -186,11 +186,39 @@ C.months = function(order){
   return res;
 };
 
-/* Установка месяца/ года закрытия i (аналог смены формата mmmm/yyyy ячейки F32:N32) */
+/* Установка месяца/года столбца i. При смене МЕСЯЦА вручную все последующие
+   столбцы сдвигаются автоматом по порядку (+1 месяц): Aug->Sep->Oct... (просьба
+   пользователя; в Excel это было через G32=F32+31 и т.д.). Год столбцов,
+   не редактировавшихся вручную, тоже корректируется при переходе через декабрь. */
+C.addMonths = function(d,n){ const r=new Date(d.getFullYear(),d.getMonth()+n,1); return r; };
+
 C.setMonthYear = function(order,i,m,y){
   if(!order.meta.mmyy) order.meta.mmyy=[];
+  if(!order.meta.dates) order.meta.dates=[];
+  if(!Array.isArray(order.meta.auto)) order.meta.auto=Array(9).fill(true); // столбцы без ручного выбора
+  const old=C.months(order)[i].date;
+  const changed=(order.meta.mmyy[i]||{}).m!==m;   // менялся именно МЕСЯЦ?
   order.meta.mmyy[i]={m:m,y:y};
-  order.meta.dates[i]=new Date(y,m,1).toISOString().slice(0,10);
+  order.meta.auto[i]=false;                        // этот столбец задан вручную
+  let d=new Date(y,m,1);
+  order.meta.dates[i]=d.toISOString().slice(0,10);
+  if(changed){                                     // каскад: последующие месяцы по порядку
+    for(let j=i+1;j<9;j++){
+      d=C.addMonths(d,1);
+      order.meta.mmyy[j]={m:d.getMonth(),y:d.getFullYear()};
+      order.meta.dates[j]=d.toISOString().slice(0,10);
+      order.meta.auto[j]=true;                     // они теперь авто-продолжение
+    }
+  } else {                                         // менялся только год — сдвигаем авто-столбцы на ту же разницу
+    const dy=y-old.getFullYear();
+    for(let j=i+1;j<9;j++){
+      if(order.meta.auto[j]){
+        d=C.addMonths(new Date(order.meta.mmyy[j].y,order.meta.mmyy[j].m,1),dy);
+        order.meta.mmyy[j]={m:d.getMonth(),y:d.getFullYear()};
+        order.meta.dates[j]=d.toISOString().slice(0,10);
+      }
+    }
+  }
 };
 
 /* ---------- ОБЪЕМЫ ЗАКРЫТИЯ (аналог листа «Объемы закрытия») ---------- */
