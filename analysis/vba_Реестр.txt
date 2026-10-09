@@ -1,0 +1,122 @@
+
+======================================================================
+### FILE: Реестр ЗАКАЗОВ 2.xlsm | MODULE: VBA/ЭтаКнига
+======================================================================
+Attribute VB_Name = "ЭтаКнига"
+Attribute VB_Base = "0{00020819-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Private Sub Workbook_Open()
+    ' Перенос курсора к последнему заказу
+    Cells.Find(What:="Нет файла", After:=ActiveCell, LookIn:=xlValues, _
+        LookAt:=xlPart, SearchOrder:=xlByRows, SearchDirection:=xlNext, _
+        MatchCase:=False, SearchFormat:=False).Activate
+End Sub
+
+======================================================================
+### FILE: Реестр ЗАКАЗОВ 2.xlsm | MODULE: VBA/Module1
+======================================================================
+Attribute VB_Name = "Module1"
+Sub Обновить()
+Attribute Обновить.VB_ProcData.VB_Invoke_Func = " \n14"
+
+
+ActiveWorkbook.UpdateLink Name:="\\NAS\Shared Docs\Реестр 2.xlsm", Type:=xlExcelLinks
+        
+'Обновляем связи с Реестром
+   ActiveWorkbook.RefreshAll
+  ' Перенос курсора к последнему заказу
+    Cells.Find(What:="Нет файла", After:=ActiveCell, LookIn:=xlValues, _
+        LookAt:=xlPart, SearchOrder:=xlByRows, SearchDirection:=xlNext, _
+        MatchCase:=False, SearchFormat:=False).Activate
+ 
+
+End Sub
+
+======================================================================
+### FILE: Реестр ЗАКАЗОВ 2.xlsm | MODULE: VBA/Лист3
+======================================================================
+Attribute VB_Name = "Лист3"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean)
+On Error GoTo 1
+
+Dim Msg, Style, Title, Help, Ctxt, Response, MyString
+    
+If Cells(Target.Row, 2) <> "Нет файла" Then
+    
+    Msg = "Открыть?  - " & Cells(Target.Row, 3).Value
+    Style = vbYesNo '+ vbCritical + vbDefaultButton2
+    Ctxt = 1000
+    Response = MsgBox(Msg, Style, Title, Help, Ctxt)
+        If Response = vbYes Then
+            ПутьФайлаЗаказа = Sheets("ПереченьЗаказов").Cells(Target.Row, 5)
+            Workbooks.Open Filename:=ПутьФайлаЗаказа  ' Открываем файл Заказа
+            Else
+            GoTo 1
+        End If
+ End If
+ 
+ 
+If Cells(Target.Row, 2) = "Нет файла" Then
+    
+    Msg = "Добавить новый Заказ?"
+    Style = vbYesNo '+ vbCritical + vbDefaultButton2
+    Ctxt = 1000
+    Response = MsgBox(Msg, Style, Title, Help, Ctxt)
+        If Response = vbYes Then
+            Workbooks.Open Filename:="\\Nas\Shared Docs\АРХИВ ЗАКАЗОВ 2\Расчет и Документация Шаблон 2.xlsm", ReadOnly:=True
+            Else
+            GoTo 1
+        End If
+ End If
+        
+1:
+End Sub
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+
+'Двигаем заказ вверх
+If Target.Column = 12 Then
+Application.ScreenUpdating = False
+
+    Workbooks.Open Filename:="\\NAS\Shared Docs\Реестр 2.xlsm"
+    Workbooks("Реестр 2.xlsm").Activate
+    
+    Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Range("D" & Target.Row & ":" & "BA" & Target.Row).Cut
+    Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Range("D" & Target.Row - 1 & ":" & "BA" & Target.Row - 1).Insert Shift:=xlDown
+    
+    ActiveWorkbook.Save
+    ActiveWindow.Close
+End If
+'\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+'Двигаем заказ вниз
+If Target.Column = 13 Then
+Application.ScreenUpdating = False
+
+    Workbooks.Open Filename:="\\NAS\Shared Docs\Реестр 2.xlsm"
+    Workbooks("Реестр 2.xlsm").Activate
+    
+    Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Range("D" & Target.Row & ":" & "BA" & Target.Row).Cut
+    Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Range("D" & Target.Row + 2 & ":" & "BA" & Target.Row + 2).Insert Shift:=xlDown
+    
+    ActiveWorkbook.Save
+    ActiveWindow.Close
+End If
+'\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+
+
+If Target.Column > 1 Then Cells(Target.Row, 1).Select
+
+End Sub

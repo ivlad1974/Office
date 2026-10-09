@@ -1,0 +1,6 @@
+OpenBLAS WARNING - could not determine the L2 cache size on this system, assuming 256k
+/usr/local/lib/python3.12/site-packages/openpyxl/worksheet/_reader.py:329: UserWarning: Data Validation extension is not supported and will be removed
+  warn(msg)
+MATERIALS count: 1049
+KONS count: 67
+ORDERS count: 842

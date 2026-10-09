@@ -1,0 +1,910 @@
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Лист2
+======================================================================
+Attribute VB_Name = "Лист2"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Private Sub Worksheet_Change(ByVal Target As Range)
+    Dim KeyCells As Range
+
+
+    Set KeyCells = Range("Дата_КС2")
+
+If Not Application.Intersect(KeyCells, Range(Target.Address)) _
+           Is Nothing Then
+Rows("26:2027").EntireRow.AutoFit
+
+                Application.CutCopyMode = False
+    Application.CutCopyMode = False
+    Range("Таблица1").AdvancedFilter Action:=xlFilterInPlace, CriteriaRange:= _
+        Range("Условия_фильтра"), Unique:=False
+
+End If
+End Sub
+Private Sub Worksheet_Activate()
+    ActiveWindow.View = xlPageBreakPreview
+    ActiveWindow.Zoom = 100
+
+End Sub
+
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Лист4
+======================================================================
+Attribute VB_Name = "Лист4"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Private Sub Worksheet_Activate()
+    ActiveWindow.View = xlPageBreakPreview
+    ActiveWindow.Zoom = 100
+End Sub
+
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Module6
+======================================================================
+Attribute VB_Name = "Module6"
+Sub Экспорт_в_Exell()
+Attribute Экспорт_в_Exell.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+    ' Отключаем обновление экрана и автоматические расчеты для максимальной скорости
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    
+
+'
+    ActiveSheet.Select
+    ActiveSheet.Copy
+    ActiveSheet.Unprotect
+    Selection.AutoFilter
+    Cells.Select
+    Selection.Copy
+    Selection.PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+        :=False, Transpose:=False
+    
+    
+    ActiveSheet.Shapes.Range(Array("Rounded Rectangle 3")).Delete
+    Rows("1:2").Select
+    Application.CutCopyMode = False
+    Selection.Delete Shift:=xlUp
+    Columns("A:A").Select
+    Selection.Delete Shift:=xlToLeft
+    
+    ActiveSheet.Range("$B$13:$J$1009").AutoFilter Field:=9, Criteria1:="1"
+    
+    
+    Range("A1").Select
+    ActiveWindow.SmallScroll Down:=-30
+
+
+    ' Возвращаем настройки Excel в исходное состояние, даже если была ошибка
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+
+End Sub
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/ЭтаКнига
+======================================================================
+Attribute VB_Name = "ЭтаКнига"
+Attribute VB_Base = "0{00020819-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+
+Private Sub Workbook_BeforePrint(Cancel As Boolean)
+
+
+If Sheets("КС-2").Range("Запрет_печати") = 1 Then
+
+Cancel = True
+MsgBox "Распечатка этой книги запрещена!", vbCritical
+
+End If
+
+End Sub
+
+Private Sub Workbook_BeforeSave(ByVal SaveAsUI As Boolean, Cancel As Boolean)
+
+'If Sheets("ВВОД").Range("ИмяОБЪЕКТАвРЕЕСТР") > 0 Then UserForm5.Show
+
+
+End Sub
+
+Private Sub Workbook_Open()
+'Кто открывал файл
+'Имя_пользователя = Environ("USERNAME")
+
+'intPos = InStrRev(ActiveWorkbook.Name, ".") ' Поиск в строке точки
+'Имя_книги = Left(ActiveWorkbook.Name, intPos - 1)
+
+Имя_книги = ActiveWorkbook.Name & "___" & Environ("USERNAME") & " _ " & Environ("COMPUTERNAME") & " _ " & Date & " _ " & Left(Time * 24, 5)
+
+
+'Environ ("USERNAME") & " / " & Environ("COMPUTERNAME")  & " / " & Date & " / " & Time
+
+
+'ТекстСтрока = Environ("USERNAME") & " / " & Environ("COMPUTERNAME") & " / " & Date & " / " & Time
+
+'TempPath = "\\Nas\Shared Docs\СК МЭС\TEMP\Открывал - (" & Имя_книги & ")" & ".txt"
+
+ 'CreateObject("Scripting.FileSystemObject").CreateTextFile(TempPath).WriteLine (ТекстСтрока) ' Создаем текстовый файл со строкой
+
+ 
+
+
+
+
+
+
+
+
+
+user1 = Environ("USERNAME")
+Comp = Environ("COMPUTERNAME")
+
+'For i = 3 To 13
+    'If Comp = Sheets("Лист1").Cells(i, 4) Then User0.ComboBox1 = Sheets("Лист1").Cells(i, 3)
+
+'Next i
+
+'Sheets("ВВОД").Select
+ 'User0.Show
+'UserForm3.Show vbModeless
+End Sub
+
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Лист1
+======================================================================
+Attribute VB_Name = "Лист1"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Private Sub Worksheet_Activate()
+    ActiveWindow.View = xlPageBreakPreview
+    ActiveWindow.Zoom = 100
+
+End Sub
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Лист5
+======================================================================
+Attribute VB_Name = "Лист5"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Private Sub Worksheet_Activate()
+    ActiveWindow.View = xlPageBreakPreview
+    ActiveWindow.Zoom = 100
+End Sub
+
+
+Private Sub Worksheet_Change(ByVal Target As Range)
+    Dim KeyCells As Range
+
+' The variable KeyCells contains the cells that will
+    ' cause an alert when they are changed.
+    Set KeyCells = Range("F30:N30")
+
+If Not Application.Intersect(KeyCells, Range(Target.Address)) _
+           Is Nothing Then
+
+' Display a message when one of the designated cells has been
+        ' changed.
+        ' Place your code here.
+        'MsgBox "Cell " & Target.Address & " has changed."
+
+  ActiveSheet.Unprotect
+
+    Range("F34:N2030").Select
+    Application.CutCopyMode = False
+    Selection.Locked = True
+    Selection.FormulaHidden = False
+    
+    ActiveSheet.Protect DrawingObjects:=False, Contents:=True, Scenarios:= _
+        False, AllowFormattingRows:=True
+    
+    
+    
+    If Range("F30") = "Закрытие" Then
+        ActiveSheet.Unprotect
+        Range("F34:F2030").Select
+        Selection.Locked = False
+        Selection.FormulaHidden = False
+    End If
+    If Range("G30") = "Закрытие" Then
+        ActiveSheet.Unprotect
+        Range("G34:G2030").Select
+        Selection.Locked = False
+        Selection.FormulaHidden = False
+    End If
+    If Range("H30") = "Закрытие" Then
+        ActiveSheet.Unprotect
+        Range("H34:H2030").Select
+        Selection.Locked = False
+        Selection.FormulaHidden = False
+    End If
+    If Range("I30") = "Закрытие" Then
+        ActiveSheet.Unprotect
+        Range("I34:I2030").Select
+        Selection.Locked = False
+        Selection.FormulaHidden = False
+    End If
+    If Range("J30") = "Закрытие" Then
+        ActiveSheet.Unprotect
+        Range("J34:J2030").Select
+        Selection.Locked = False
+        Selection.FormulaHidden = False
+    End If
+    If Range("K30") = "Закрытие" Then
+        ActiveSheet.Unprotect
+        Range("K34:K2030").Select
+        Selection.Locked = False
+        Selection.FormulaHidden = False
+    End If
+    If Range("L30") = "Закрытие" Then
+        ActiveSheet.Unprotect
+        Range("L34:L2030").Select
+        Selection.Locked = False
+        Selection.FormulaHidden = False
+    End If
+    If Range("M30") = "Закрытие" Then
+        ActiveSheet.Unprotect
+        Range("M34:M2030").Select
+        Selection.Locked = False
+        Selection.FormulaHidden = False
+    End If
+    If Range("N30") = "Закрытие" Then
+        ActiveSheet.Unprotect
+        Range("N34:N2030").Select
+        Selection.Locked = False
+        Selection.FormulaHidden = False
+    End If
+
+ActiveSheet.Protect DrawingObjects:=False, Contents:=True, Scenarios:= _
+        False, AllowFormattingCells:=True, AllowFormattingRows:=True
+
+
+End If
+End Sub
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Лист3
+======================================================================
+Attribute VB_Name = "Лист3"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Private Sub Worksheet_Activate()
+    ActiveWindow.View = xlPageBreakPreview
+    ActiveWindow.Zoom = 100
+End Sub
+
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Лист17
+======================================================================
+Attribute VB_Name = "Лист17"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Private Sub Worksheet_Activate()
+    ActiveWindow.View = xlPageBreakPreview
+    ActiveWindow.Zoom = 100
+    
+        
+ActiveSheet.Unprotect
+    
+ActiveSheet.Range("$C$13:$K$2009").AutoFilter Field:=9, Criteria1:="1"
+
+ActiveSheet.Protect DrawingObjects:=True, Contents:=True, Scenarios:=True
+
+
+End Sub
+
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Лист6
+======================================================================
+Attribute VB_Name = "Лист6"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Private Sub Worksheet_Activate()
+   ActiveWindow.View = xlPageBreakPreview
+    ActiveWindow.Zoom = 100
+
+End Sub
+
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Module4
+======================================================================
+Attribute VB_Name = "Module4"
+Sub ЭкспортПереписать()
+Attribute ЭкспортПереписать.VB_ProcData.VB_Invoke_Func = " \n14"
+
+MyBook = ActiveWorkbook.Name
+Application.ScreenUpdating = False
+
+
+
+Строка = Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Cells(1, 1) + 11
+
+Workbooks(MyBook).Activate
+Sheets("Экспорт").Range("Экспорт").Copy
+
+Workbooks("Реестр 2.xlsm").Activate
+ActiveSheet.Unprotect
+
+Workbooks(MyBook).Activate
+
+
+' Экспорт в РЕЕСТР "Данные по Заказу"///////////////////////////////////////////////////
+Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Cells(Строка, 5).PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+        :=False, Transpose:=False
+'//////////////////////////////////////////////////////////////////////////////////////////////
+  
+  
+
+
+
+
+End Sub
+
+
+
+
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Module5
+======================================================================
+Attribute VB_Name = "Module5"
+'Для создания папки на диске
+Declare PtrSafe Function SHCreateDirectoryEx Lib "shell32" Alias "SHCreateDirectoryExA" _
+                                     (ByVal hwnd As Long, ByVal pszPath As String, ByVal psa As Any) As Long
+Sub СохранениеНовогоЗаказа()
+
+If ActiveWorkbook.Name <> "Расчет и Документация Шаблон 2.xlsm" Then ОтменаПроверки = 1
+
+
+
+
+
+
+ If Sheets("ВВОД").Range("ИмяОБЪЕКТАвРЕЕСТР") > 0 And Sheets("ВВОД").Range("ИсточникЗаказа") > 0 Then
+    user1 = Environ("USERNAME")
+    user2 = Environ("COMPUTERNAME")
+
+    MyBook = ActiveWorkbook.Name
+    Workbooks(MyBook).Activate
+    ИмяЗаказа = Sheets("ВВОД").Range("ИмяОБЪЕКТАвРЕЕСТР")
+    Путь = "\\Nas\Shared Docs\АРХИВ ЗАКАЗОВ 2\" & ИмяЗаказа
+    
+    'Для создания папки на диске
+     SHCreateDirectoryEx Application.hwnd, Путь, ByVal 0&
+     
+    'Меняем Имя файла
+    Workbooks.Application.DisplayAlerts = False 'без вопроса о переписывании файла
+    ActiveWorkbook.SaveAs Путь & "\Заказ_" & ИмяЗаказа & ".xlsm"
+        
+    Sheets("Экспорт").Range("ПутьКфайлу") = Путь & "\Заказ_" & ИмяЗаказа & ".xlsm"
+    Sheets("Экспорт").Range("ВремяЗаписи") = Time
+    Sheets("Экспорт").Range("ДатаЗаписи") = Date
+    Sheets("Экспорт").Range("Пользователь") = user1
+    Sheets("Экспорт").Range("Компьютер") = user2
+    Else
+    MsgBox "Нет Названия Заказа или Источника Заказа"
+    GoTo 1
+ End If
+ 
+
+ 
+ 
+ 
+ 
+ 'UserForm5.Hide
+MyBook = ActiveWorkbook.Name
+'Data = Sheets("ТАБЕЛЬ").Range("M1") * 1 ' Дата файла
+Application.ScreenUpdating = False
+
+Workbooks.Open Filename:="\\Nas\Shared Docs\Реестр 2.xlsm" ' Открываем РЕЕСТР
+
+
+Строка = Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Cells(1, 1) + 11
+
+Workbooks(MyBook).Activate
+Sheets("Экспорт").Range("Экспорт").Copy
+
+Workbooks("Реестр 2.xlsm").Activate
+ActiveSheet.Unprotect
+
+НоваяЗапись = Workbooks(MyBook).Worksheets("ВВОД").Cells(6, 2)
+Workbooks(MyBook).Activate
+
+
+
+
+For i = 11 To 500 'Проверяем такую запись в РЕЕСТРЕ
+    Проверяемая = Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Cells(i, 7)
+    If Проверяемая = НоваяЗапись Then
+    
+    If ОтменаПроверки = 1 Then GoTo 5
+        Dim Msg, Style, Title, Help, Ctxt, Response, MyString
+        Msg = "Есть такой ЗАКАЗ. Переписать?"
+        Style = vbYesNo + vbCritical '+ vbDefaultButton2
+        Ctxt = 1000
+        Response = MsgBox(Msg, Style, Title, Help, Ctxt)
+            If Response = vbYes Then
+                MyString = "Yes"
+                
+5:
+                Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Cells(i, 5).PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+                 :=False, Transpose:=False
+                Workbooks("Реестр 2.xlsm").Save
+                Workbooks("Реестр 2.xlsm").Close
+                GoTo 2
+ 
+            Else
+                MyString = "No"
+            Workbooks("Реестр 2.xlsm").Save: Workbooks("Реестр 2.xlsm").Close: GoTo 1
+            End If
+        End If
+    
+Next i
+
+
+
+
+' Экспорт в РЕЕСТР "Данные по Заказу"///////////////////////////////////////////////////
+Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Cells(Строка, 5).PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+        :=False, Transpose:=False
+'//////////////////////////////////////////////////////////////////////////////////////////////
+  
+  
+
+Application.ScreenUpdating = False
+  
+Workbooks("Реестр 2.xlsm").Save
+Workbooks("Реестр 2.xlsm").Close
+
+2:
+ActiveWorkbook.Save
+MsgBox ("Изменения внесены в Реестр 2.")
+1:
+
+Application.ScreenUpdating = True
+ 
+ 
+ 
+End Sub
+Sub Очистка()
+UserForm4.Show
+End Sub
+Sub Импорт_данных()
+'On Error GoTo 1
+
+'Workbooks(Имя_файла_для_Импорта).Worksheets("ВВОД").Range("B4:B50").Copy Destination:= _
+'Workbooks("Расчет и Документация Шаблон 2.xlsm").Worksheets("ВВОД").Range("B4:B50")
+
+'Workbooks(Имя_файла_для_Импорта).Worksheets("ВВОД").Range("I4").Copy Destination:= _
+'Workbooks("Расчет и Документация Шаблон 2.xlsm").Worksheets("ВВОД").Range("I4")
+'Range("I19:I30").Value = Range("Импорт_2").Value
+Range("Импорт_62").Select
+End Sub
+
+
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Module1
+======================================================================
+Attribute VB_Name = "Module1"
+Sub СохранениеНовогоЗаказа()
+
+If ActiveWorkbook.Name <> "Расчет и Документация Шаблон 2.xlsm" Then ОтменаПроверки = 1
+
+
+
+
+
+
+ If Sheets("Материалы").Range("ИмяОБЪЕКТАвРЕЕСТР") > 0 Then
+    'user1 = Environ("USERNAME")
+    'user2 = Environ("COMPUTERNAME")
+
+    MyBook = ActiveWorkbook.Name
+    Workbooks(MyBook).Activate
+    ИмяЗаказа = Sheets("Материалы").Range("ИмяОБЪЕКТАвРЕЕСТР")
+    Путь = "\\Nas\Shared Docs\АРХИВ ЗАКАЗОВ 2\" & ИмяЗаказа
+    
+    'Для создания папки на диске
+     SHCreateDirectoryEx Application.hwnd, Путь, ByVal 0&
+     
+    'Меняем Имя файла
+    Workbooks.Application.DisplayAlerts = False 'без вопроса о переписывании файла
+    
+    ActiveWorkbook.SaveAs Путь & "\Заказ_" & ИмяЗаказа & "_копия_от_" & Date & "_" & Format(Time, "hh.nn.ss") & ".xlsm"
+    
+    ActiveWorkbook.SaveAs Путь & "\Заказ_" & ИмяЗаказа & ".xlsm"
+    
+    Sheets("Экспорт").Range("ПутьКфайлу") = Путь & "\Заказ_" & ИмяЗаказа & ".xlsm"
+    'Sheets("Экспорт").Range("ВремяЗаписи") = Time
+    'Sheets("Экспорт").Range("ДатаЗаписи") = Date
+    'Sheets("Экспорт").Range("Пользователь") = user1
+    'Sheets("Экспорт").Range("Компьютер") = user2
+    Else
+    MsgBox "Нет Названия Заказа"
+    GoTo 1
+ End If
+ 
+
+ 
+ 
+ 
+ 
+ 'UserForm5.Hide
+MyBook = ActiveWorkbook.Name
+'Data = Sheets("ТАБЕЛЬ").Range("M1") * 1 ' Дата файла
+Application.ScreenUpdating = False
+
+Workbooks.Open Filename:="\\Nas\Shared Docs\Реестр 2.xlsm" ' Открываем РЕЕСТР
+
+
+Строка = Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Cells(1, 1) + 11
+
+Workbooks(MyBook).Activate
+Sheets("Экспорт").Range("Экспорт").Copy
+
+Workbooks("Реестр 2.xlsm").Activate
+ActiveSheet.Unprotect
+
+НоваяЗапись = Workbooks(MyBook).Worksheets("Материалы").Range("ИмяОБЪЕКТАвРЕЕСТР")
+Workbooks(MyBook).Activate
+
+
+
+
+For i = 11 To 5000 'Проверяем такую запись в РЕЕСТРЕ
+    Проверяемая = Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Cells(i, 7)
+    If Проверяемая = НоваяЗапись Then
+    
+    If ОтменаПроверки = 1 Then GoTo 5
+        Dim Msg, Style, Title, Help, Ctxt, Response, MyString
+        Msg = "Есть такой ЗАКАЗ. Переписать?"
+        Style = vbYesNo + vbCritical '+ vbDefaultButton2
+        Ctxt = 1000
+        Response = MsgBox(Msg, Style, Title, Help, Ctxt)
+            If Response = vbYes Then
+                MyString = "Yes"
+                
+5:
+                Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Cells(i, 5).PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+                 :=False, Transpose:=False
+                Workbooks("Реестр 2.xlsm").Save
+                Workbooks("Реестр 2.xlsm").Close
+                GoTo 2
+ 
+            Else
+                MyString = "No"
+            Workbooks("Реестр 2.xlsm").Save: Workbooks("Реестр 2.xlsm").Close: GoTo 1
+            End If
+        End If
+    
+Next i
+
+
+
+
+' Экспорт в РЕЕСТР "Данные по Заказу"///////////////////////////////////////////////////
+Workbooks("Реестр 2.xlsm").Worksheets("РасчетДокументация").Cells(Строка, 5).PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+        :=False, Transpose:=False
+'//////////////////////////////////////////////////////////////////////////////////////////////
+  
+  
+
+Application.ScreenUpdating = False
+  
+Workbooks("Реестр 2.xlsm").Save
+Workbooks("Реестр 2.xlsm").Close
+
+2:
+ActiveWorkbook.Save
+MsgBox ("Изменения внесены в Реестр 2.")
+1:
+
+Application.ScreenUpdating = True
+ 
+ 
+ 
+End Sub
+
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Лист7
+======================================================================
+Attribute VB_Name = "Лист7"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Module2
+======================================================================
+Attribute VB_Name = "Module2"
+Sub Сохранить_в_PDF_КС2()
+Attribute Сохранить_в_PDF_КС2.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+
+Наша_организация = Sheets("Материалы").Range("Наша_организация")
+Заказчик = Sheets("КС-6").Range("Заказчик")
+Объект = Sheets("Материалы").Range("ИмяОБЪЕКТАвРЕЕСТР")
+Год = Sheets("КС-2").Range("Год_КС2")
+Месяц = Sheets("КС-2").Range("Месяц_КС2")
+Сумма = Sheets("КС-2").Range("Сумма_КС2")
+
+
+
+    Путь = "\\Nas\Shared Docs\ЗАКРЫТИЕ\" & Наша_организация & "\" & Заказчик & "\" & Объект & "\" & Месяц & " " & Год
+    
+    'Для создания папки на диске
+     SHCreateDirectoryEx Application.hwnd, Путь, ByVal 0&
+     
+    
+
+Sheets("КС-2").Range("Запрет_печати") = 0
+            
+            
+     'Меняем цвет ячеек на белый
+            Sheets("КС-6").Select
+            Range("F30:N30").Select
+    With Selection.Font
+        .ThemeColor = xlThemeColorDark1
+        .TintAndShade = 0
+    End With
+    
+    
+    
+        'Сохраняем PDF
+        ActiveSheet.ExportAsFixedFormat Type:=xlTypePDF, Filename:=Путь & "\" & "КС6_" & ".pdf", _
+        Quality:=xlQualityStandard, IncludeDocProperties:=True, IgnorePrintAreas _
+        :=False, OpenAfterPublish:=True
+        
+        
+    'Меняем цвет ячеек на черный
+          Range("F30:N30").Select
+    With Selection.Font
+        .ColorIndex = xlAutomatic
+        .TintAndShade = 0
+    End With
+        
+        
+        'Сохраняем PDF
+        Sheets("КС-2").Select
+        ActiveSheet.ExportAsFixedFormat Type:=xlTypePDF, Filename:=Путь & "\" & "КС2_" & Сумма & ".pdf", _
+        Quality:=xlQualityStandard, IncludeDocProperties:=True, IgnorePrintAreas _
+        :=False, OpenAfterPublish:=True
+        
+
+
+Sheets("КС-2").Range("Запрет_печати") = 1
+
+
+    Dim FilePath As String
+    Dim FileNum As Integer
+    Dim CurrentDateTime As String
+    Dim SummaKS2 As String
+    Dim ObjectName As String
+    Dim Customer As String
+    Dim LineToWrite As String
+
+    ' Укажите путь к файлу
+    FilePath = "D:\Temp\Закрытие.txt"
+
+    ' Получение текущей даты и времени
+    CurrentDateTime = Now()
+
+    ' Чтение значений из именованных диапазонов
+    On Error Resume Next ' Обработка ошибок
+    SummaKS2 = ThisWorkbook.Names("Сумма_КС2").RefersToRange.Value
+    ObjectName = ThisWorkbook.Names("ИмяОБЪЕКТАвРЕЕСТР").RefersToRange.Value
+    Customer = ThisWorkbook.Names("Заказчик").RefersToRange.Value
+    If Err.Number <> 0 Then
+        MsgBox "Один или несколько именованных диапазонов не найдены!", vbCritical
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    ' Формирование строки для записи
+    LineToWrite = CurrentDateTime & vbTab & "КС2 на сумму:" & SummaKS2 & vbTab & ObjectName & vbTab & Customer
+
+    ' Открытие файла для добавления данных
+    FileNum = FreeFile
+    Open FilePath For Append As #FileNum
+
+    ' Запись строки в файл
+    Print #FileNum, LineToWrite
+
+    ' Закрытие файла
+    Close #FileNum
+    MsgBox "Данные сохранены в D:\Temp\Закрытие.txt", vbInformation
+
+End Sub
+Sub Сохранить_в_PDF_КС3()
+'
+'
+Наша_организация = Sheets("Материалы").Range("Наша_организация")
+Заказчик = Sheets("КС-6").Range("Заказчик")
+Объект = Sheets("Материалы").Range("ИмяОБЪЕКТАвРЕЕСТР")
+Год = Sheets("КС-2").Range("Год_КС2")
+Месяц = Sheets("КС-2").Range("Месяц_КС2")
+Сумма = Sheets("КС-2").Range("Сумма_КС2")
+
+
+
+    Путь = "\\Nas\Shared Docs\ЗАКРЫТИЕ\" & Наша_организация & "\" & Заказчик & "\" & Объект & "\" & Месяц & " " & Год
+    
+    'Для создания папки на диске
+     SHCreateDirectoryEx Application.hwnd, Путь, ByVal 0&
+     
+    
+
+Sheets("КС-2").Range("Запрет_печати") = 0
+
+    ActiveSheet.ExportAsFixedFormat Type:=xlTypePDF, Filename:=Путь & "\" & "КС3_" & Сумма & ".pdf", _
+        Quality:=xlQualityStandard, IncludeDocProperties:=True, IgnorePrintAreas _
+        :=False, OpenAfterPublish:=True
+
+Sheets("КС-2").Range("Запрет_печати") = 1
+
+
+End Sub
+
+
+
+
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Module3
+======================================================================
+Attribute VB_Name = "Module3"
+Sub Защита()
+Attribute Защита.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Защита Макрос
+'
+ActiveSheet.Unprotect
+'
+    Range("F34:F1030").Select
+    Selection.Locked = True
+    Selection.FormulaHidden = False
+    
+ ActiveSheet.Protect DrawingObjects:=False, Contents:=True, Scenarios:= _
+        False, AllowFormattingRows:=True
+    
+End Sub
+Sub Снять_защиту()
+Attribute Снять_защиту.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Снять_защиту Макрос
+'
+
+'
+    ActiveSheet.Unprotect
+End Sub
+Sub Макрос3()
+Attribute Макрос3.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Макрос3 Макрос
+'
+
+'
+    ActiveSheet.Protect DrawingObjects:=False, Contents:=True, Scenarios:= _
+        False, AllowFormattingRows:=True
+End Sub
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Module7
+======================================================================
+Attribute VB_Name = "Module7"
+Sub Макрос1()
+Attribute Макрос1.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Макрос1 Макрос
+'
+
+'
+    Range("F34:N1030").Select
+    Application.CutCopyMode = False
+    Selection.Locked = True
+    Selection.FormulaHidden = False
+    
+    Range("F34:F1030").Select
+    Selection.Locked = False
+    Selection.FormulaHidden = False
+End Sub
+Sub Макрос2()
+Attribute Макрос2.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Макрос2 Макрос
+'
+
+'
+    ActiveSheet.Protect DrawingObjects:=False, Contents:=True, Scenarios:= _
+        False, AllowFormattingCells:=True, AllowFormattingRows:=True
+End Sub
+Sub Макрос4()
+Attribute Макрос4.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Макрос4 Макрос
+'
+
+'
+    ActiveSheet.Unprotect
+End Sub
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Module8
+======================================================================
+Attribute VB_Name = "Module8"
+Sub Макрос5()
+Attribute Макрос5.VB_ProcData.VB_Invoke_Func = " \n14"
+'
+' Макрос5 Макрос
+'
+
+'
+    ActiveSheet.Protect DrawingObjects:=False, Contents:=True, Scenarios:= _
+        False, AllowFormattingCells:=True, AllowFormattingRows:=True
+End Sub
+
+======================================================================
+### FILE: Заказ_3.1 1-Этап ДЗЕН от 11.08.2026.xlsm | MODULE: VBA/Лист8
+======================================================================
+Attribute VB_Name = "Лист8"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
