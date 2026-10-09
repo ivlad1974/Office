@@ -18,9 +18,28 @@ main{padding:16px 20px;max-width:1600px;margin:0 auto}
 .btn.danger{color:#b00}
 .btn.mini{padding:2px 8px;font-size:12px}
 .hidden{display:none!important}
-table.grid{width:100%;border-collapse:collapse;background:var(--card);font-size:13px}
+/* Контейнеры с прокруткой — НЕ скрывают шапки: thead прикреплён (sticky) */
+.scroll-wrap,.scroll-x{overflow:auto;max-height:min(72vh,760px)}
+table.grid{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);font-size:13px}
 .grid th,.grid td{border:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
-.grid thead th{background:var(--th);position:sticky;top:52px;z-index:1}
+/* offset шапки = высота верхней панели (задаётся через --top-h в JS); z-index выше кнопок/полей */
+/* Таблицы с фиксированной шириной колонок (задаётся JS: авто/ручная) */
+table.grid{table-layout:fixed}
+/* Шапка приклеивается ВНУТРИ контейнера прокрутки — не скрывается никогда
+   (в т.ч. в коротких таблицах, где страница не прокручивается под шапкой topbar) */
+.scroll-wrap>.grid thead th,.scroll-x>.grid thead th{top:0}
+.grid thead th{background:var(--th);color:var(--txt);position:sticky;top:var(--top-h,52px);z-index:6}
+.grid tbody input,.grid tbody select{position:relative;z-index:1}
+/* Поля ввода тянутся по ширине ячейки; текст не вылезает за границы колонок */
+.grid td input,.grid td select{width:100%;min-width:0;text-overflow:ellipsis}
+.grid td .pick{width:auto}
+/* Ячейка «Наименование + кнопка справочника 🔎» */
+td.name-cell{display:flex;gap:4px;align-items:center}
+td.name-cell input{flex:1;width:auto;min-width:60px}
+td.name-cell .dict{flex:none}
+/* Ручное изменение ширины: вертикальная полоска-хват за правую границу <th> */
+.col-grip{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;z-index:8;user-select:none}
+.col-grip:hover{background:var(--acc);opacity:.45}
 .grid .num{text-align:right;white-space:nowrap}
 .grid tfoot td{background:var(--tfoot);font-weight:600}
 tr.section-row td{background:var(--section)}
@@ -66,32 +85,59 @@ legend{font-weight:600;padding:0 6px}
 @media print,body.print{background:#fff}
 body.print .topbar,body.print main{padding:0}
 
-/* ============ ТЕМЫ (data-theme на <body>) ============ */
-body[data-theme="dark"]{--bg:#15181e;--card:#1f242d;--line:#39404b;--acc:#4d8fe8;--txt:#dde3ec;
+/* ============ ТЕМЫ (data-theme на <body>) ============
+   Во всех темах текст/поля гарантированно контрастны фону:
+   --txt на --bg/--card, шапки --th с --txt, опции выпадающих списков всегда тёмные на белом. */
+body[data-theme="dark"]{--bg:#15181e;--card:#1f242d;--line:#39404b;--acc:#7ab0ff;--txt:#e6ebf3;
   --top:#0c1016;--th:#262d38;--tfoot:#2a323f;--section:#2f3b4d;--locked:#2c2f36;--unlock:#1f3a2c;
-  --unlock2:#255237;--hint:#8b95a5;--doc:#fafafa;--btn:#2a303a;}
+  --unlock2:#255237;--hint:#aab4c3;--doc:#fafafa;--btn:#2a303a;--sel:#274b6d;--danger:#ff8f8f;--oktagt:#0c1016;}
 body[data-theme="blue"]{--bg:#e8f0fb;--card:#f7faff;--line:#b9cbe6;--acc:#1c4f9c;--txt:#17273f;
   --top:#0e3a70;--th:#d7e5f7;--tfoot:#c9dcf2;--section:#b7d0ee;--locked:#e3eaf3;--unlock:#d2e8ff;
-  --unlock2:#bcdcff;--hint:#4a617e;--doc:#fff;--btn:#f2f7fd;}
+  --unlock2:#bcdcff;--hint:#4a617e;--doc:#fff;--btn:#f2f7fd;--sel:#bcdcff;--danger:#a00;--oktagt:#17273f;}
 body[data-theme="sepia"]{--bg:#f3ead8;--card:#fbf5e8;--line:#d9c9a8;--acc:#8a5a20;--txt:#3c2f1b;
   --top:#5a4324;--th:#efe3cb;--tfoot:#e7d8bb;--section:#ddcba6;--locked:#e9dfc9;--unlock:#e2eed2;
-  --unlock2:#d3e6bd;--hint:#7c6c50;--doc:#fdf9ef;--btn:#fbf5e8;}
+  --unlock2:#d3e6bd;--hint:#7c6c50;--doc:#fdf9ef;--btn:#fbf5e8;--sel:#e7d3ae;--danger:#8a2010;--oktagt:#3c2f1b;}
 .theme-ctl{display:flex;align-items:center;gap:6px;color:#fff;font-size:14px;margin-left:auto}
 .theme-ctl select{background:#ffffff22;color:#fff;border:1px solid #ffffff55;border-radius:6px;padding:4px 6px}
+/* опции всегда читаемы: белый фон + тёмный текст (наследуются всеми темами) */
+select option{color:#20242c;background:#fff}
 .theme-ctl select option{color:#20242c;background:#fff}
-body[data-theme="dark"] .grid th,body[data-theme="dark"] .grid td{border-color:var(--line)}
-body:not([data-theme="light"]) input,body:not([data-theme="light"]) select{background:var(--card);color:var(--txt)}
-body:not([data-theme="light"]) input.locked{color:#8b95a5}
-body:not([data-theme="light"]) th.hmonth select{background:var(--card);color:var(--txt)}
-body:not([data-theme="light"]) th.unlock .hstatus{color:var(--txt)}
-@media print{body[data-theme]{background:#fff}}
-
-/* === Редактор: подзаголовки, выделение, буфер === */
+/*datalist: подсказки справочника всегда читаемы (белый фон/тёмный текст) */
+datalist option{color:#20242c;background:#fff}
+.grid th,.grid td{color:var(--txt)}
+input,select{background:var(--card);color:var(--txt)}
+input::placeholder{color:var(--hint)}
+.btn{background:var(--btn);color:var(--txt)}
+.btn.primary{color:#fff}
+body[data-theme="dark"] .btn.primary{color:#0c1016}          /* светлая кнопка → тёмный текст */
+.btn.danger{color:var(--danger,#b00)}
+td.over{color:var(--danger,#b00)}
+input.locked{background:var(--locked);color:var(--hint)}
+.tag{color:var(--txt)}
+.tag.ok{color:var(--oktagt,#20242c)}
+.toast{background:var(--top);color:#fff}
+.doc.a4{color:#20242c}                                        /* документ — всегда тёмный текст на светлом листе */
+.doc-head-line,.form-grid label,.mcell{color:var(--txt)}
+.form-grid label{color:var(--txt)}
+/* Всплывающее окно «Справочник» — контраст во всех темах */
+.dictpop{position:absolute;z-index:120;background:var(--card);color:var(--txt);border:1px solid var(--acc);
+  border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.35);padding:8px 12px;font-size:12.5px;line-height:1.5;max-width:420px}
+.dictpop b{color:var(--txt)}
+.dictpop .dp-hint{color:var(--hint)}
 tr.section-row input.sec-name{font-weight:700;background:transparent;border:none;color:var(--txt)}
 tr.section-row.sub-row,input.sec-name.sub{font-weight:600;font-style:italic}
 td input.sec-name.sub{font-weight:600;font-style:italic;padding-left:18px}
 tr.sel td{background:var(--sel,#cfe6ff)}
-body:not([data-theme="light"]) tr.sel td{background:#274b6d}
+tr.sel td input,tr.sel td select{background:var(--card)}
+@media print{body[data-theme]{background:#fff}}
+/* Печать таблиц: автоширина вместо фиксированной, без sticky-шапок и ручек */
+@media print{
+  table.grid{table-layout:auto!important;width:auto!important}
+  table.grid colgroup{display:none}
+  .grid thead th{position:static!important;top:auto!important}
+  .col-grip{display:none!important}
+  .grid td input,.grid td select{width:auto}
+}
 .tagline{font-size:.85rem;opacity:.8;margin-left:6px}
 .sep{width:1px;height:22px;background:var(--border,#ccc);margin:0 6px;display:inline-block;vertical-align:middle}
 button.btn.mini.ins{padding:1px 4px;font-size:.75rem;margin:0 1px}
