@@ -153,10 +153,10 @@ function renderSheet(name){
 
 /* ---- Материалы (редактируемая таблица) ----
    Возможности:
+   - добавление строки — плюсик ＋ НА ЛИНИИ МЕЖДУ строками (плюс последняя ＋ в конце);
+     при нажатии предлагается тип: Заголовок / Подзаголовок / Позиция;
    - при выборе позиции из справочника (datalist) или точном вводе наименования
-     Тип / Ед.изм. / Цена проставляются САМИ (applyDictToRow);
-   - подзаголовки при вводе строки; выбор типа «Подзаголовок» превращает строку в подзаголовок;
-   - вставка строки МЕЖДУ существующими (кнопки слева △＋ Выше / ▽＋ Ниже и на любой строке);
+     Тип / Ед.изм. / Цена проставляются САМИ (applyDictToRow) — выбирать их не нужно;
    - копирование строки и группы строк (чекбокс + Shift+клик по диапазону), вставка в любое место;
    - удаление ВСЕГДА с подтверждением (confirm);
    - шапка таблицы прикреплена (sticky), ширина столбцов — авто по содержимому
@@ -197,28 +197,22 @@ function renderMaterials(){
     const tr=document.createElement('tr');
     tr.dataset.row=i;
     if(selRows.has(i)) tr.classList.add('sel');
-    const insBtns=`<button class="btn mini ins" data-ins-before="${i}" title="Вставить строку выше">△＋</button>
-                   <button class="btn mini ins" data-ins-after="${i}" title="Вставить строку ниже">▽＋</button>`;
-    if(!row.t){ // заголовок раздела / подзаголовок
+
+    if(!row.t){ // заголовок раздела / подзаголовок (тип задаётся при добавлении через ＋)
       tr.className='section-row'+(row.sub?' sub-row':'');
       tr.innerHTML=`<td><input type="checkbox" class="pick" data-pick="${i}" ${selRows.has(i)?'checked':''}></td>
-        <td><select class="sec-type" data-i="${i}"><option${row.sub?'':' selected'}>Заголовок</option><option${row.sub?' selected':''}>Подзаголовок</option></select></td>
+        <td class="sec-kind">${row.sub?'Подзаголовок':'Заголовок'}</td>
         <td colspan="7"><input class="sec-name${row.sub?' sub':''}" data-i="${i}" value="${esc(row.n||'')}" placeholder="Название раздела / подзаголовка"></td>
-        <td>${insBtns}</td>
         <td><button class="btn mini" data-cp="${i}" title="Копировать группу/строку">⧉</button>
            <button class="btn mini danger" data-rm="${i}">✕</button></td>`;
     } else {
       tr.innerHTML=`<td><input type="checkbox" class="pick" data-pick="${i}" ${selRows.has(i)?'checked':''}></td>
-        <td><select data-f="t" data-i="${i}">
-            <option${row.t==='Материалы'?' selected':''}>Материалы</option>
-            <option${row.t==='Работа'?' selected':''}>Работа</option>
-            <option value="__sub">Подзаголовок</option></select></td>
-        <td><input data-f="n" data-i="${i}" value="${esc(row.n||'')}" list="dict-list-${row.t==='Работа'?'w':'m'}" title="Выберите позицию из справочника — Тип, ед.изм. и цена проставятся сами"></td>
+        <td class="type-cell" title="Тип, ед.изм. и цена определяются автоматически по справочнику">${esc(row.t)}</td>
+        <td><input data-f="n" data-i="${i}" value="${esc(row.n||'')}" list="dict-list-all" title="Выберите наименование из справочника — Тип, ед.изм. и цена проставятся сами"></td>
         <td><input data-f="u" data-i="${i}" value="${esc(row.u||'')}" size="4"></td>
         <td><input data-f="q" data-i="${i}" class="num" value="${row.q??''}"></td>
         <td><input data-f="p" data-i="${i}" class="num" value="${row.p??''}"></td>
         <td class="num">${C.money(row.sum)}</td><td class="num">${C.money(row.I)}</td><td class="num">${C.money(row.J)}</td>
-        <td>${insBtns}</td>
         <td><button class="btn mini" data-cp="${i}" title="Копировать группу/строку">⧉</button>
            <button class="btn mini danger" data-rm="${i}">✕</button></td>`;
     }
@@ -234,13 +228,9 @@ function renderMaterials(){
   tb.onchange=e=>{                                   // делегирование: устойчиво к перерисовке DOM
     const el=e.target;
     if(el.classList.contains('sec-name')){ cur.rows[+el.dataset.i].n=el.value; return recalcAll(); }
-    if(el.classList.contains('sec-type')){ cur.rows[+el.dataset.i].sub=el.value==='Подзаголовок'; return recalcAll(); }
     if(!el.dataset || el.dataset.f===undefined) return;
     const i=+el.dataset.i, r=cur.rows[i], f=el.dataset.f;
-    if(f==='t'){ // смена типа; опция «Подзаголовок» превращает строку в подзаголовок
-      if(el.value==='__sub'){ r.t=null; r.sub=true; return recalcAll(); }
-      r.t=el.value;
-    } else r[f]=(f==='q'||f==='p')?C.num(el.value):el.value;
+    r[f]=(f==='q'||f==='p')?C.num(el.value):el.value;
     if(f==='n'){ applyDictToRow(r); }                // Тип/ед./цена проставляются сами
     recalcAll();
   };
@@ -280,8 +270,6 @@ function renderMaterials(){
     updateSelInfo();
   });
   tb.querySelectorAll('[data-cp]').forEach(b=>b.onclick=copyAt);
-  tb.querySelectorAll('[data-ins-before]').forEach(b=>b.onclick=()=>insertRow(+b.dataset.insBefore,'above'));
-  tb.querySelectorAll('[data-ins-after]').forEach(b=>b.onclick=()=>insertRow(+b.dataset.insAfter,'below'));
 
   function copyAt(e){
     const i=+e.currentTarget.dataset.cp;
@@ -291,11 +279,81 @@ function renderMaterials(){
     toast(`Скопировано строк: ${rowClipboard.length}${selRows.size?' (группа)':''}`);
     $('#clip-info').textContent=`Буфер: ${rowClipboard.length} стр.`;
   }
-  function insertRow(anchor,where){
-    if(rowsInDom()[anchor]!==anchor){selRows.clear();renderMaterials();return toast('Таблица обновилась — нажмите ещё раз');}
-    pasteAt(where==='above'?anchor:anchor+1);
-  }
+  renderPlusLines();
   autoFitColumns('#mat-table');
+}
+/* Плюсики МЕЖДУ строками таблицы (и один в конце): рисуются как отдельный
+   tr.plus-row после каждой строки tbody. Клик по ＋ открывает выбор типа новой
+   строки: Заголовок / Подзаголовок / Позиция (позиция — материал или работа). */
+function renderPlusLines(){
+  const tb=$('#mat-table tbody'); if(!tb) return;
+  tb.querySelectorAll('tr.plus-row').forEach(x=>x.remove());
+  const n=cur.rows.length;
+  const make=(at,last)=>{
+    const tr=document.createElement('tr');
+    tr.className='plus-row'+(last?' last':'');
+    tr.innerHTML=`<td colspan="10"><button class="plus-btn" data-plus="${at}" title="Добавить строку ${last?'в конец':'между строками'}">＋</button></td>`;
+    return tr;
+  };
+  const rows=[...tb.querySelectorAll('tr[data-row]')];
+  if(n===0){ tb.appendChild(make(0,true)); }        // пустой заказ — одна ＋ в начале
+  else rows.forEach((tr,idx)=>{                     // ＋ между строками + одна после последней
+    if(idx<n) tr.after(make(idx+1,idx===n-1));
+  });
+  tb.querySelectorAll('.plus-btn').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation(); openTypeChooser(+b.dataset.plus,b);
+  }));
+}
+/* Выбор типа строки — всплывающее меню прямо у плюсика.
+   Обработчики кнопок назначаются сразу (до показа), закрытие по клику вне —
+   capture-слушателем document; Escape тоже закрывает меню. */
+let typeMenu=null;
+function closeTypeMenu(){ if(typeMenu){typeMenu.remove();typeMenu=null;} }
+function openTypeChooser(at,btn){
+  closeTypeMenu();
+  const m=document.createElement('div'); m.className='type-menu';
+  m.innerHTML=`<div class="type-menu-title">Добавить строку:</div>
+    <button data-type="header">📌 Заголовок</button>
+    <button data-type="sub">↳ Подзаголовок</button>
+    <button data-type="Материалы">🧱 Позиция · Материалы</button>
+    <button data-type="Работа">🔧 Позиция · Работа</button>
+    ${rowClipboard.length?`<button data-type="paste" class="paste-opt">📋 Вставить из буфера (${rowClipboard.length})</button>`:''}`;
+  m.querySelectorAll('button').forEach(b2=>b2.onclick=()=>{
+    const t=b2.dataset.type; closeTypeMenu(); addRowAt(at,t);
+  });
+  document.body.appendChild(m);
+  const r=btn.getBoundingClientRect();
+  m.style.visibility='hidden';
+  let L=Math.min(Math.max(6,r.left),window.innerWidth-m.offsetWidth-8);
+  let T=r.bottom+4;
+  if(T+m.offsetHeight>window.innerHeight-6) T=Math.max(6,r.top-m.offsetHeight-4); // вверх, если снизу не хватает места
+  m.style.left=L+'px'; m.style.top=T+'px'; m.style.visibility='visible';
+  typeMenu=m;
+  const escH=e=>{ if(e.key==='Escape'){closeTypeMenu();document.removeEventListener('keydown',escH);} };
+  document.addEventListener('keydown',escH);
+  document.addEventListener('mousedown',function outside(e){
+    if(!typeMenu){document.removeEventListener('mousedown',outside,true);return;}
+    if(!typeMenu.contains(e.target)){ closeTypeMenu(); document.removeEventListener('mousedown',outside,true); }
+  },true);
+}
+function addRowAt(at,type){
+  const shift=i=>i>=at?i+1:i;                    // выделение не «уезжает» после вставки
+  selRows=new Set([...selRows].map(shift)); lastClickedRow=lastClickedRow==null?null:shift(lastClickedRow);
+  if(type==='paste'){
+    if(!rowClipboard.length) return toast('Буфер пуст');
+    cur.rows.splice(at,0,...rowClipboard.map(r=>JSON.parse(JSON.stringify(r))));
+    toast(`Вставлено строк из буфера: ${rowClipboard.length}`);
+  } else if(type==='header'){
+    cur.rows.splice(at,0,{t:null,n:'Новый заголовок',sub:false,u:null,q:null,p:null});
+    toast('Добавлен заголовок');
+  } else if(type==='sub'){
+    cur.rows.splice(at,0,{t:null,n:'Новый подзаголовок',sub:true,u:null,q:null,p:null});
+    toast('Добавлен подзаголовок');
+  } else {
+    cur.rows.splice(at,0,{t:type,n:'',u:'шт',q:0,p:0});
+    toast(type==='Работа'?'Добавлена позиция (работа)':'Добавлена позиция (материал)');
+  }
+  renumberVols(); recalcAll();
 }
 function updateSelInfo(){
   const c=$('#sel-count'); if(c) c.textContent=selRows.size?`Выделено: ${selRows.size}`:'';
@@ -308,10 +366,6 @@ async function deleteSelectionWithConfirm(){
   cur.rows=cur.rows.filter((_,j)=>!selRows.has(j)); selRows.clear(); lastClickedRow=null;
   renumberVols(); recalcAll();
 }
-/* тулбар слева: вставка/удаление */
-function toolbarAnchor(){ return selRows.size? Math.min(...selRows) : (lastClickedRow!=null?lastClickedRow:cur.rows.length-1); }
-$('#btn-ins-above').onclick=()=>pasteAt(Math.max(0,toolbarAnchor()));
-$('#btn-ins-below').onclick=()=>pasteAt(Math.min(cur.rows.length,toolbarAnchor()+1));
 $('#btn-del-rows').onclick=deleteSelectionWithConfirm;
 $('#btn-clear-sel').onclick=()=>{selRows.clear();lastClickedRow=null;updateSelInfo();renderMaterials();};
 function pasteAt(at){
@@ -324,13 +378,6 @@ function pasteAt(at){
   }
   renumberVols(); recalcAll();
 }
-$$('.add-row').forEach(b=>b.onclick=()=>{
-  const kind=b.dataset.kind;
-  if(kind==='header') cur.rows.push({t:null,n:'Новый заголовок',sub:false,u:null,q:null,p:null});
-  else if(kind==='sub') cur.rows.push({t:null,n:'Новый подзаголовок',sub:true,u:null,q:null,p:null});
-  else cur.rows.push({t:kind,n:'',u:'шт',q:0,p:0});
-  renumberVols(); recalcAll();
-});
 document.getElementById('btn-cut-rows').addEventListener('click',()=>{
   if(!selRows.size) return toast('Выделите строки (клик / Shift+клик / чекбокс)');
   rowClipboard=selectedIdxs().map(j=>JSON.parse(JSON.stringify(cur.rows[j])));
@@ -344,7 +391,7 @@ $('#btn-copy-rows').onclick=()=>{
 document.getElementById('btn-paste-rows').addEventListener('click',()=>{
   if(!rowClipboard.length) return toast('Буфер пуст');
   cur.rows.push(...rowClipboard.map(r=>JSON.parse(JSON.stringify(r)))); renumberVols(); recalcAll();
-  toast(`Вставлено в конец: ${rowClipboard.length} стр. (или △＋/▽＋ — в любое место)`); });
+  toast(`Вставлено в конец: ${rowClipboard.length} стр. (или ＋ между строками → «Вставить из буфера»)`); });
 function renumberVols(){ /* позиции после удаления/добавления сдвигаются — пересчёт заново при рендере */ }
 
 /* ---- Автоширина + ручное изменение ширины столбцов ----
@@ -649,9 +696,18 @@ $('#btn-cust-add').onclick=()=>{store.customers.push({list:'Новый зака�
    ед.изм. и цены из справочника (dictLookup). Изначально заполняется из данных
    исходной Excel-книги (1178 строк), далее полностью под контролем пользователя. */
 let spravFilter={m:'',w:''};
+let spravWin='m';   // активное окно справочника: 'm' — материалы, 'w' — работы
+$$('.sprav-tab').forEach(b=>b.onclick=()=>{
+  spravWin=b.dataset.sprav;
+  $$('.sprav-tab').forEach(x=>x.classList.toggle('active',x===b));
+  $('#sprav-win-m').classList.toggle('hidden',spravWin!=='m');
+  $('#sprav-win-w').classList.toggle('hidden',spravWin!=='w');
+  renderSprav();
+});
 function renderSprav(){
   const defs=[['m','dictMat','Материалы'],['w','dictWork','Работы']];
   defs.forEach(([s,key,label])=>{
+    const cntEl=$('#sprav-'+s+'-count2'); if(cntEl) cntEl.textContent=store[key].length;
     const q=(spravFilter[s]||'').toLowerCase();
     const tb=$('#sprav-'+s+'-tbody'); if(!tb) return; tb.innerHTML='';
     let shown=0;
@@ -677,7 +733,7 @@ function renderSprav(){
     tb.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
       const d=store[key][+b.dataset.del];
       if(!await askConfirm(`Удалить из справочника: «${String(d.n).slice(0,80)}»?`)) return;
-      store[key].splice(+b.dataset.del,1);save();renderSprav();});
+      store[key].splice(+b.dataset.del,1);save();fillDatalists();renderSprav();});
     tb.querySelectorAll('[data-addorder]').forEach(b=>b.onclick=()=>{
       if(!cur) return toast('Сначала откройте заказ (вкладка Заказы → Открыть)');
       const d=store[key][+b.dataset.i];
@@ -686,13 +742,13 @@ function renderSprav(){
     });
   });
 }
-$('#btn-sprav-add-m').onclick=()=>{store.dictMat.unshift({n:'Новый материал',u:'шт',p:0});save();renderSprav();};
-$('#btn-sprav-add-w').onclick=()=>{store.dictWork.unshift({n:'Новая работа',u:'шт',p:0});save();renderSprav();};
+$('#btn-sprav-add-m').onclick=()=>{store.dictMat.unshift({n:'Новый материал',u:'шт',p:0});save();fillDatalists();renderSprav();};
+$('#btn-sprav-add-w').onclick=()=>{store.dictWork.unshift({n:'Новая работа',u:'шт',p:0});save();fillDatalists();renderSprav();};
 $('#sprav-search-m').oninput=e=>{spravFilter.m=e.target.value.toLowerCase();renderSprav();};
 $('#sprav-search-w').oninput=e=>{spravFilter.w=e.target.value.toLowerCase();renderSprav();};
 $('#btn-sprav-reset').onclick=()=>{
   if(!confirm('Перезаполнить справочники из данных исходной Excel-книги? Ваши правки будут потеряны.'))return;
-  const d=buildDictsFromSeed(); store.dictMat=d.mat; store.dictWork=d.work; save(); renderSprav();
+  const d=buildDictsFromSeed(); store.dictMat=d.mat; store.dictWork=d.work; save(); fillDatalists(); renderSprav();
   toast('Справочники восстановлены из оригинала');
 };
 
@@ -701,9 +757,11 @@ function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 /* datalist для автоподстановки наименований в редакторе (первые 300 записей —
    чтобы не тормозить DOM; полный поиск — через dictLookup по точному совпадению) */
 function fillDatalists(){
-  const dl=m=>m.slice(0,300).map(d=>`<option value="${esc(d.n)}">`).join('');
-  $('#dict-list-m').innerHTML=dl(store.dictMat);
-  $('#dict-list-w').innerHTML=dl(store.dictWork);
+  // единый список автоподстановки: материалы + работы (тип строится по справочнику сам)
+  const seen=new Set(), all=[];
+  store.dictMat.concat(store.dictWork).forEach(d=>{ const k=d.n.trim().toLowerCase(); if(k&&!seen.has(k)){seen.add(k);all.push(d);} });
+  const html=all.map(d=>`<option value="${esc(d.n)}">${d.n==='' ? '' : (store.dictWork.includes(d)?'работа':'материал')}</option>`).join('');
+  const el=$('#dict-list-all'); if(el) el.innerHTML=html;
 }
 function toast(t){const el=$('#toast');el.textContent=t;el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),2500);}
 
